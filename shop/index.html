@@ -72,7 +72,7 @@ function resize() {
 }
 const toStage = (x, y) => [(x - OX) / K, (y - OY) / K];
 
-/* ---------- language (en / uk / ru, override with ?lang=xx) ---------- */
+/* ---------- language (en / uk / de, override with ?lang=xx) ---------- */
 const GOODS = [
   { e: '🍎', k: 'apple', p: 2 }, { e: '🍌', k: 'banana', p: 1 }, { e: '🥛', k: 'milk', p: 3 },
   { e: '🍞', k: 'bread', p: 2 }, { e: '🧀', k: 'cheese', p: 4 }, { e: '🥕', k: 'carrot', p: 1 },
@@ -93,11 +93,11 @@ const LANGS = {
       watermelon: 'Кавун', cookie: 'Печиво', eggs: 'Яйця', grapes: 'Виноград', juice: 'Сік', icecream: 'Морозиво',
       car: 'Машинка', ball: "М'ячик" }
   },
-  ru: {
-    code: 'ru-RU', hello: 'Привет! Идём за покупками!', pin: 'Нажимай кнопочки!', thanks: 'Спасибо! Пока-пока!',
-    items: { apple: 'Яблоко', banana: 'Банан', milk: 'Молоко', bread: 'Хлеб', cheese: 'Сыр', carrot: 'Морковка',
-      watermelon: 'Арбуз', cookie: 'Печенье', eggs: 'Яйца', grapes: 'Виноград', juice: 'Сок', icecream: 'Мороженое',
-      car: 'Машинка', ball: 'Мячик' }
+  de: {
+    code: 'de-DE', hello: 'Hallo! Wir gehen einkaufen!', pin: 'Drück die Knöpfe!', thanks: 'Danke schön! Tschüss!',
+    items: { apple: 'Apfel', banana: 'Banane', milk: 'Milch', bread: 'Brot', cheese: 'Käse', carrot: 'Karotte',
+      watermelon: 'Wassermelone', cookie: 'Keks', eggs: 'Eier', grapes: 'Trauben', juice: 'Saft', icecream: 'Eis',
+      car: 'Spielzeugauto', ball: 'Ball' }
   }
 };
 const langKey = ((new URLSearchParams(location.search).get('lang')) || navigator.language || 'en').slice(0, 2).toLowerCase();

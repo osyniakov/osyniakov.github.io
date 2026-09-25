@@ -40,7 +40,7 @@ const rand = (a, b) => a + Math.random() * (b - a);
 const pick = a => a[Math.floor(Math.random() * a.length)];
 const EF = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
-/* ---------- language (en / uk / ru, override with ?lang=xx) ---------- */
+/* ---------- language (en / uk / de, override with ?lang=xx) ---------- */
 const LANGS = {
   en: {
     code: 'en-US',
@@ -58,13 +58,13 @@ const LANGS = {
     animals: { dog: 'Собачка! Гав-гав!', cat: 'Котик! Няв!', frog: 'Жабка! Ква-ква!', cow: 'Корівка! Му-у!',
                pig: 'Свинка! Хрю-хрю!', lion: 'Лев! Р-р-р!', monkey: 'Мавпочка! У-у-а-а!', duck: 'Качечка! Кря-кря!' }
   },
-  ru: {
-    code: 'ru-RU',
-    nums: ['Один', 'Два', 'Три', 'Четыре', 'Пять', 'Шесть', 'Семь', 'Восемь', 'Девять', 'Десять'],
-    colors: ['Красный', 'Оранжевый', 'Жёлтый', 'Зелёный', 'Синий', 'Фиолетовый', 'Розовый'],
-    yay: 'Ура! Молодец!',
-    animals: { dog: 'Собачка! Гав-гав!', cat: 'Котик! Мяу!', frog: 'Лягушка! Ква-ква!', cow: 'Коровка! Му-у!',
-               pig: 'Свинка! Хрю-хрю!', lion: 'Лев! Р-р-р!', monkey: 'Обезьянка! У-у-а-а!', duck: 'Уточка! Кря-кря!' }
+  de: {
+    code: 'de-DE',
+    nums: ['Eins', 'Zwei', 'Drei', 'Vier', 'Fünf', 'Sechs', 'Sieben', 'Acht', 'Neun', 'Zehn'],
+    colors: ['Rot', 'Orange', 'Gelb', 'Grün', 'Blau', 'Lila', 'Rosa'],
+    yay: 'Hurra! Super gemacht!',
+    animals: { dog: 'Hund! Wau wau!', cat: 'Katze! Miau!', frog: 'Frosch! Quak quak!', cow: 'Kuh! Muh!',
+               pig: 'Schwein! Oink oink!', lion: 'Löwe! Roar!', monkey: 'Affe! U-u-a-a!', duck: 'Ente! Quak quak!' }
   }
 };
 const langKey = ((new URLSearchParams(location.search).get('lang')) || navigator.language || 'en').slice(0, 2).toLowerCase();
