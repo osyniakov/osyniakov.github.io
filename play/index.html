@@ -250,13 +250,17 @@ const Home = {
     { e: '🎈', c: '#ff5a5a', s: () => Balloons },
     { e: '🎆', c: '#7b4dff', s: () => Fireworks },
     { e: '🐶', c: '#4cc437', s: () => Peekaboo },
-    { e: '🎹', c: '#2e86ff', s: () => Music }
+    { e: '🎹', c: '#2e86ff', s: () => Music },
+    { e: '🛒', c: '#ff9a1f', href: '../shop/' }
   ],
   enter() { this.clouds = makeClouds(5); },
   layout() {
-    const wide = W / H > 1.5, cols = wide ? 4 : 2, rows = wide ? 1 : 2;
+    const n = this.items.length, cols = W / H > 1.9 ? n : W >= H ? 3 : 2, rows = Math.ceil(n / cols);
     const cw = W / cols, ch = H / rows, r = Math.min(cw, ch) * 0.36;
-    return this.items.map((it, i) => ({ it, i, x: cw * (i % cols + 0.5), y: ch * (Math.floor(i / cols) + 0.5), r }));
+    return this.items.map((it, i) => {
+      const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols);   // center a short last row
+      return { it, i, x: W / 2 + cw * (i % cols - (inRow - 1) / 2), y: ch * (row + 0.5), r };
+    });
   },
   frame(dt) {
     sky(); drawClouds(this.clouds, dt); hills(0.9);
@@ -271,7 +275,9 @@ const Home = {
   down(x, y) {
     for (const t of this.layout()) {
       if (Math.hypot(x - t.x, y - t.y) < t.r * 1.1) {
-        sfx.click(); go(t.it.s()); burst(x, y, COLORS, 30, S * 0.6, { life: 1 });
+        sfx.click();
+        if (t.it.href) { location.href = t.it.href + location.search; return; }
+        go(t.it.s()); burst(x, y, COLORS, 30, S * 0.6, { life: 1 });
         return;
       }
     }
