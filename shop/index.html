@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Shop!">
+<meta name="theme-color" content="#dff3ff">
+<title>Shop!</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #dff3ff; overscroll-behavior: none; }
+  * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #sat { position: fixed; top: 0; left: 0; width: 1px; height: env(safe-area-inset-top, 0px); visibility: hidden; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="sat"></div>
+<script>
+'use strict';
+
+/* ---------- setup ---------- */
+const cv = document.getElementById('c');
+const g = cv.getContext('2d');
+let W = 0, H = 0, DPR = 1, SAFE_TOP = 0, T = 0;
+let LY = null, K = 1, OX = 0, OY = 0;   // stage layout, scale and offset
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const lerp = (a, b, k) => a + (b - a) * k;
+const ease = k => 1 - Math.pow(1 - k, 3);
+const inR = (x, y, r, m = 0) => x >= r.x - m && x <= r.x + r.w + m && y >= r.y - m && y <= r.y + r.h + m;
+const EF = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+const NF = 'ui-rounded,"SF Pro Rounded",system-ui,-apple-system,sans-serif';
+
+/* Two hand-tuned stage layouts (virtual units), scaled to fit the screen. */
+const VL = {
+  w: 1024, h: 768, counterY: 292, SP: 92,
+  shelf: { x: 16, y: 14, w: 992, h: 262, cols: 7, rows: 2 },
+  belt: { x: 16, y: 330, w: 584, h: 104 },
+  scan: { x: 600, y: 316, w: 150, h: 132 },
+  disp: { x: 768, y: 306, w: 240, h: 150 },
+  bag: { x: 330, y: 490, w: 250, h: 260 },
+  card: { x: 60, y: 560, w: 236, h: 148 },
+  term: { x: 644, y: 478, w: 364, h: 278 }
+};
+const VP = {
+  w: 768, h: 1024, counterY: 382, SP: 92,
+  shelf: { x: 16, y: 14, w: 736, h: 352, cols: 5, rows: 3 },
+  belt: { x: 16, y: 420, w: 520, h: 104 },
+  scan: { x: 536, y: 406, w: 216, h: 132 },
+  disp: { x: 16, y: 560, w: 380, h: 140 },
+  bag: { x: 66, y: 730, w: 270, h: 280 },
+  term: { x: 420, y: 560, w: 332, h: 300 },
+  card: { x: 466, y: 872, w: 240, h: 140 }
+};
+
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = window.innerWidth; H = window.innerHeight;
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+  SAFE_TOP = document.getElementById('sat').offsetHeight || 0;
+  const prev = LY;
+  LY = W >= H ? VL : VP;
+  const avH = H - SAFE_TOP;
+  K = Math.min(W / LY.w, avH / LY.h);
+  OX = (W - LY.w * K) / 2; OY = SAFE_TOP + (avH - LY.h * K) / 2;
+  if (prev !== LY) onLayoutChange();
+}
+const toStage = (x, y) => [(x - OX) / K, (y - OY) / K];
+
+/* ---------- language (en / uk / ru, override with ?lang=xx) ---------- */
+const GOODS = [
+  { e: '🍎', k: 'apple', p: 2 }, { e: '🍌', k: 'banana', p: 1 }, { e: '🥛', k: 'milk', p: 3 },
+  { e: '🍞', k: 'bread', p: 2 }, { e: '🧀', k: 'cheese', p: 4 }, { e: '🥕', k: 'carrot', p: 1 },
+  { e: '🍉', k: 'watermelon', p: 5 }, { e: '🍪', k: 'cookie', p: 2 }, { e: '🥚', k: 'eggs', p: 3 },
+  { e: '🍇', k: 'grapes', p: 3 }, { e: '🧃', k: 'juice', p: 2 }, { e: '🍦', k: 'icecream', p: 4 },
+  { e: '🚗', k: 'car', p: 5 }, { e: '⚽', k: 'ball', p: 4 }
+];
+const LANGS = {
+  en: {
+    code: 'en-US', hello: "Hello! Let's go shopping!", pin: 'Press the buttons!', thanks: 'Thank you! Bye-bye!',
+    items: { apple: 'Apple', banana: 'Banana', milk: 'Milk', bread: 'Bread', cheese: 'Cheese', carrot: 'Carrot',
+      watermelon: 'Watermelon', cookie: 'Cookie', eggs: 'Eggs', grapes: 'Grapes', juice: 'Juice', icecream: 'Ice cream',
+      car: 'Toy car', ball: 'Ball' }
+  },
+  uk: {
+    code: 'uk-UA', hello: 'Привіт! Ходімо по покупки!', pin: 'Натискай кнопочки!', thanks: 'Дякую! Бувай!',
+    items: { apple: 'Яблуко', banana: 'Банан', milk: 'Молоко', bread: 'Хліб', cheese: 'Сир', carrot: 'Морквинка',
+      watermelon: 'Кавун', cookie: 'Печиво', eggs: 'Яйця', grapes: 'Виноград', juice: 'Сік', icecream: 'Морозиво',
+      car: 'Машинка', ball: "М'ячик" }
+  },
+  ru: {
+    code: 'ru-RU', hello: 'Привет! Идём за покупками!', pin: 'Нажимай кнопочки!', thanks: 'Спасибо! Пока-пока!',
+    items: { apple: 'Яблоко', banana: 'Банан', milk: 'Молоко', bread: 'Хлеб', cheese: 'Сыр', carrot: 'Морковка',
+      watermelon: 'Арбуз', cookie: 'Печенье', eggs: 'Яйца', grapes: 'Виноград', juice: 'Сок', icecream: 'Мороженое',
+      car: 'Машинка', ball: 'Мячик' }
+  }
+};
+const langKey = ((new URLSearchParams(location.search).get('lang')) || navigator.language || 'en').slice(0, 2).toLowerCase();
+const L = LANGS[langKey] || LANGS.en;
+
+/* ---------- speech ---------- */
+let voice = null;
+function pickVoice() {
+  if (!('speechSynthesis' in window)) return;
+  const vs = speechSynthesis.getVoices(), pre = L.code.slice(0, 2);
+  voice = vs.find(v => v.lang.replace('_', '-') === L.code) || vs.find(v => v.lang.startsWith(pre)) || null;
+}
+if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
+function say(text) {
+  if (!('speechSynthesis' in window)) return;
+  try {
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = L.code; if (voice) u.voice = voice;
+    u.rate = 0.95; u.pitch = 1.25; u.volume = 1;
+    speechSynthesis.speak(u);
+  } catch (e) {}
+}
+
+/* ---------- audio (all synthesized) ---------- */
+let ac = null, master = null;
+function unlockAudio() {
+  if (!ac) {
+    try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ac = new AC();
+    master = ac.createGain(); master.gain.value = 0.7;
+    const comp = ac.createDynamicsCompressor();
+    master.connect(comp); comp.connect(ac.destination);
+    const b = ac.createBuffer(1, 1, 22050), s = ac.createBufferSource();
+    s.buffer = b; s.connect(ac.destination); s.start(0);
+  }
+  if (ac.state !== 'running') ac.resume();
+}
+function tone(freq, dur, type = 'sine', vol = 0.3, slideTo = null, delay = 0) {
+  if (!ac) return;
+  const t = ac.currentTime + delay, o = ac.createOscillator(), gn = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  gn.gain.setValueAtTime(0.0001, t);
+  gn.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+  gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(gn); gn.connect(master); o.start(t); o.stop(t + dur + 0.05);
+}
+const noiseBufs = {};
+function noise(dur, vol = 0.3, freq = 2000, delay = 0, type = 'bandpass') {
+  if (!ac) return;
+  const key = Math.round(dur * 100);
+  let buf = noiseBufs[key];
+  if (!buf) {
+    const len = Math.max(1, Math.floor(ac.sampleRate * dur));
+    buf = ac.createBuffer(1, len, ac.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2);
+    noiseBufs[key] = buf;
+  }
+  const t = ac.currentTime + delay, s = ac.createBufferSource(), f = ac.createBiquadFilter(), gn = ac.createGain();
+  s.buffer = buf; f.type = type; f.frequency.value = freq; gn.gain.value = vol;
+  s.connect(f); f.connect(gn); gn.connect(master); s.start(t);
+}
+const sfx = {
+  pick() { tone(520, 0.12, 'sine', 0.25, 880); },
+  beep() { tone(1850, 0.16, 'square', 0.14); },
+  bag() { noise(0.18, 0.35, 900); tone(160, 0.12, 'sine', 0.25, 90); },
+  nope() { tone(300, 0.15, 'triangle', 0.2, 220); },
+  key(i) { tone(700 + i * 45, 0.09, 'square', 0.08); },
+  tap() { tone(1400, 0.08, 'sine', 0.2); tone(1400, 0.08, 'sine', 0.2, null, 0.12); },
+  proc(i) { tone(1000 + i * 120, 0.06, 'square', 0.06); },
+  approve() {
+    tone(1320, 0.18, 'sine', 0.3); tone(1760, 0.35, 'sine', 0.3, null, 0.16);
+    [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.45, 'triangle', 0.22, null, 0.45 + i * 0.12));
+  },
+  whoosh() { noise(0.4, 0.3, 700); },
+  sparkle() { tone(rand(1400, 2400), 0.12, 'sine', 0.08); }
+};
+
+/* ---------- drawing helpers ---------- */
+function emoji(ch, x, y, size, rot = 0, alpha = 1) {
+  g.save(); g.globalAlpha = alpha; g.translate(x, y); if (rot) g.rotate(rot);
+  g.font = `${Math.round(size)}px ${EF}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = '#000';   // emoji glyphs inherit the fill's alpha
+  g.fillText(ch, 0, 0); g.restore();
+}
+function text(s, x, y, size, color, align = 'center', weight = 800) {
+  g.font = `${weight} ${Math.round(size)}px ${NF}`; g.textAlign = align; g.textBaseline = 'middle';
+  g.fillStyle = color; g.fillText(s, x, y);
+}
+function rr(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  g.beginPath(); g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function coin(x, y, r) {
+  g.fillStyle = '#f5b700'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  g.fillStyle = '#ffd84d'; g.beginPath(); g.arc(x, y, r * 0.72, 0, 7); g.fill();
+}
+function starPath(x, y, r, rot = 0) {
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const r2 = i % 2 ? r * 0.45 : r, a = rot + i * Math.PI / 5 - Math.PI / 2;
+    g.lineTo(x + Math.cos(a) * r2, y + Math.sin(a) * r2);
+  }
+  g.closePath();
+}
+
+/* ---------- particles (stage units) ---------- */
+let parts = [];
+const CONF = ['#ff4d4d', '#ff9a1f', '#ffd21f', '#4cd137', '#2e86ff', '#9b59ff', '#ff66c4'];
+function addP(p) { if (parts.length < 900) { p.max = p.life; parts.push(p); } }
+function burst(x, y, colors, n, spd, o = {}) {
+  for (let i = 0; i < n; i++) {
+    const a = rand(0, Math.PI * 2), s = spd * rand(0.3, 1);
+    addP({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand((o.life || 1) * 0.6, o.life || 1),
+      size: (o.size || 9) * rand(0.6, 1.3), color: pick(colors), g: o.g ?? 600, drag: o.drag ?? 0.97,
+      type: o.type || 'confetti', rot: rand(0, 6), vr: rand(-10, 10) });
+  }
+}
+function sparkleAt(x, y) { burst(x, y, ['#fff', '#ffe066', '#ffd6f5', '#bdf'], 10, 260, { type: 'star', g: 0, life: 0.6, size: 10, drag: 0.9 }); sfx.sparkle(); }
+function updateParts(dt) {
+  for (const p of parts) {
+    p.life -= dt; const d = Math.pow(p.drag, dt * 60);
+    p.vx *= d; p.vy *= d; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+  parts = parts.filter(p => p.life > 0 && p.y < LY.h + 200);
+}
+function drawParts() {
+  for (const p of parts) {
+    g.globalAlpha = Math.min(1, 2 * p.life / p.max); g.fillStyle = p.color;
+    if (p.type === 'star') { starPath(p.x, p.y, p.size, p.rot); g.fill(); }
+    else { g.save(); g.translate(p.x, p.y); g.rotate(p.rot); g.fillRect(-p.size, -p.size * 0.5, p.size * 2, p.size); g.restore(); }
+  }
+  g.globalAlpha = 1;
+}
+
+/* ================= GAME STATE ================= */
+const ITEM = 78;
+let items = [];                 // goods that left the shelf: fly / belt / drag / scan / tobag
+const st = {
+  mode: 'shop',                 // shop | cardgo | pin | proc | paid | reset
+  t: 0, total: 0, scanned: [], last: null, pin: 0, flash: 0,
+  bag: [], bagBump: 0, bagOff: 0, receiptT: 0, idle: 0, hello: false
+};
+const card = { x: 0, y: 0, state: 'home', tw: null, wig: 0 };
+const keyHit = new Array(12).fill(0);
+const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '✖', '0', '✔'];
+
+function cardHome() { const c = LY.card; return [c.x + c.w / 2, c.y + c.h / 2]; }
+function onLayoutChange() {
+  if (card.state === 'home') [card.x, card.y] = cardHome();
+  const b = LY.belt;
+  for (const it of items) if (it.state === 'belt') it.x = Math.min(Math.max(it.x, b.x + 40), LY.scan.x - 40);
+}
+
+function tween(o, x1, y1, d, arc, done) { o.tw = { x0: o.x, y0: o.y, x1, y1, t: 0, d, arc, done }; }
+function stepTween(o, dt) {
+  const w = o.tw; if (!w) return;
+  w.t += dt; const k = Math.min(1, w.t / w.d), e = ease(k);
+  o.x = lerp(w.x0, w.x1, e); o.y = lerp(w.y0, w.y1, e) - w.arc * Math.sin(Math.PI * k);
+  if (k >= 1) { o.tw = null; w.done && w.done(o); }
+}
+
+const queueCount = () => items.filter(i => i.state === 'belt' || i.state === 'fly' || i.state === 'drag').length;
+const maxQueue = () => Math.floor((LY.belt.w - 20) / LY.SP);
+const scanCenter = () => [LY.scan.x + LY.scan.w / 2, LY.scan.y + LY.scan.h / 2];
+const beltY = () => LY.belt.y + LY.belt.h / 2;
+
+function shelfCell(i) {
+  const s = LY.shelf, cw = s.w / s.cols, ch = s.h / s.rows;
+  const c = i % s.cols, r = Math.floor(i / s.cols);
+  return { x: s.x + cw * (c + 0.5), y: s.y + ch * r + ch * 0.42, cw, ch };
+}
+function shelfAt(x, y) {
+  const s = LY.shelf;
+  if (!inR(x, y, s)) return -1;
+  const i = Math.floor((y - s.y) / (s.h / s.rows)) * s.cols + Math.floor((x - s.x) / (s.w / s.cols));
+  return i < GOODS.length ? i : -1;
+}
+function takeFromShelf(gi, x, y) {
+  if (queueCount() >= maxQueue()) { sfx.nope(); return null; }
+  const gd = GOODS[gi], c = shelfCell(gi);
+  const it = { ...gd, x: x ?? c.x, y: y ?? c.y, state: 'fly', rot: 0, wig: 0, tw: null };
+  items.push(it); sfx.pick();
+  return it;
+}
+function sendToBelt(it) {
+  it.state = 'fly';
+  tween(it, LY.belt.x + 50, beltY(), 0.55, 90, o => { o.state = 'belt'; });
+}
+
+function scanItem(it) {
+  if (st.mode !== 'shop') { it.wig = 0.5; sfx.nope(); return; }
+  const [sx, sy] = scanCenter();
+  it.state = 'moving';
+  tween(it, sx, sy, 0.22, 20, startScan);
+}
+function startScan(it) {
+  it.state = 'scan'; it.st = 0; it.tw = null;
+  sfx.beep(); st.flash = 1;
+  st.total += it.p; st.scanned.push(it); st.last = { e: it.e, p: it.p, t: 0 };
+  say(L.items[it.k]);
+  burst(it.x, it.y, ['#ff4d4d', '#fff', '#7CFFB2'], 14, 260, { type: 'star', g: 0, life: 0.5, size: 9 });
+}
+function bagTop() { const b = LY.bag; return [b.x + b.w / 2 + st.bagOff, b.y + b.h - b.h * 0.72]; }
+
+function insertCard() {
+  st.mode = 'cardgo'; card.state = 'tw';
+  const t = LY.term;
+  tween(card, t.x + t.w / 2, t.y + t.h * 0.2, 0.5, 40, () => {
+    card.state = 'tap'; card.st = 0; sfx.tap();
+  });
+}
+function pressKey(i) {
+  keyHit[i] = 1; sfx.key(i);
+  const k = KEYS[i];
+  if (st.mode !== 'pin') { if (k >= '0' && k <= '9') say(k); return; }
+  if (k === '✖') { st.pin = Math.max(0, st.pin - 1); return; }
+  if (k === '✔') { if (st.pin > 0) startProc(); else sfx.nope(); return; }
+  st.pin++; say(k);
+  if (st.pin >= 4) startProc();
+}
+function startProc() { st.mode = 'proc'; st.t = 0; }
+function paid() {
+  st.mode = 'paid'; st.t = 0; st.receiptT = 0;
+  sfx.approve(); setTimeout(() => say(L.thanks), 400);
+  for (let k = 0; k < 150; k++) addP({
+    x: rand(-OX / K, (W - OX) / K), y: rand(-300, 0), vx: rand(-60, 60), vy: rand(50, 250), life: rand(2.2, 3.5),
+    size: rand(7, 12), color: pick(CONF), g: 180, drag: 0.99, type: 'confetti', rot: rand(0, 6), vr: rand(-8, 8)
+  });
+}
+function startReset() { st.mode = 'reset'; st.t = 0; sfx.whoosh(); st.cleared = false; }
+
+function keyRects() {
+  const t = LY.term, pad = 16, gap = 8, sh = t.h * 0.26;
+  const y0 = t.y + pad + sh + 10, kh = (t.y + t.h - pad - y0 - gap * 3) / 4, kw = (t.w - pad * 2 - gap * 2) / 3;
+  return KEYS.map((k, i) => ({ x: t.x + pad + (i % 3) * (kw + gap), y: y0 + Math.floor(i / 3) * (kh + gap), w: kw, h: kh }));
+}
+
+/* ---------- update ---------- */
+function update(dt) {
+  st.t += dt; st.idle += dt;
+  st.flash = Math.max(0, st.flash - dt * 3);
+  st.bagBump = Math.max(0, st.bagBump - dt * 4);
+  card.wig = Math.max(0, card.wig - dt);
+  for (let i = 0; i < 12; i++) keyHit[i] = Math.max(0, keyHit[i] - dt * 4);
+  if (st.last) st.last.t += dt;
+
+  // goods
+  for (const it of items) {
+    stepTween(it, dt);
+    it.wig = Math.max(0, it.wig - dt);
+    if (it.state === 'scan' && (it.st += dt) > 0.35) {
+      it.state = 'tobag';
+      const [bx, by] = bagTop();
+      tween(it, bx + rand(-40, 40), by + 20, 0.5, 110, o => {
+        o.dead = true;
+        st.bag.push({ e: o.e, dx: rand(-0.3, 0.3), rot: rand(-0.4, 0.4) });
+        st.bagBump = 1; sfx.bag();
+      });
+    }
+  }
+  const q = items.filter(i => i.state === 'belt').sort((a, b) => b.x - a.x);
+  q.forEach((it, i) => {
+    const tx = LY.scan.x - LY.SP / 2 - 6 - i * LY.SP, d = tx - it.x, step = 260 * dt;
+    it.x += Math.abs(d) < step ? d : Math.sign(d) * step;
+    it.y = lerp(it.y, beltY(), Math.min(1, dt * 12));
+  });
+  items = items.filter(i => !i.dead);
+
+  // card
+  stepTween(card, dt);
+  if (card.state === 'tap' && (card.st += dt) > 0.8) {
+    card.state = 'tw';
+    const [hx, hy] = cardHome();
+    tween(card, hx, hy, 0.5, 40, () => { card.state = 'home'; });
+    st.mode = 'pin'; st.pin = 0; say(L.pin);
+  }
+
+  // payment flow
+  if (st.mode === 'proc') {
+    const n = Math.floor(st.t / 0.3);
+    if (n !== st.procN) { st.procN = n; sfx.proc(n % 4); }
+    if (st.t > 1.6) paid();
+  } else if (st.mode === 'paid') {
+    st.receiptT += dt;
+    if (st.t > 7) startReset();
+  } else if (st.mode === 'reset') {
+    if (st.t < 0.6) st.bagOff = ease(st.t / 0.6) * 1400;
+    else {
+      if (!st.cleared) {
+        st.cleared = true; st.bag = []; st.total = 0; st.scanned = []; st.last = null; st.pin = 0;
+      }
+      const k = Math.min(1, (st.t - 0.6) / 0.6);
+      st.bagOff = -1400 * (1 - ease(k));
+      if (k >= 1) { st.bagOff = 0; st.mode = 'shop'; }
+    }
+  }
+}
+
+/* ---------- drawing ---------- */
+function drawBackground() {
+  const gr = g.createLinearGradient(0, 0, 0, H);
+  gr.addColorStop(0, '#dff3ff'); gr.addColorStop(1, '#c4e6fb');
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+}
+function drawShelf() {
+  const s = LY.shelf, ch = s.h / s.rows;
+  g.fillStyle = '#b87a3d'; rr(s.x - 8, s.y - 8, s.w + 16, s.h + 16, 18); g.fill();
+  g.fillStyle = '#f7e3c6'; rr(s.x, s.y, s.w, s.h, 12); g.fill();
+  for (let r = 0; r < s.rows; r++) {
+    const py = s.y + ch * (r + 1) - 16;
+    g.fillStyle = '#c98b4a'; g.fillRect(s.x, py, s.w, 16);
+    g.fillStyle = '#a86d33'; g.fillRect(s.x, py + 12, s.w, 4);
+  }
+  GOODS.forEach((gd, i) => {
+    const c = shelfCell(i), sz = Math.min(c.cw * 0.62, c.ch * 0.6, 84);
+    emoji(gd.e, c.x, c.y + Math.sin(T * 2 + i) * 2, sz);
+    // price tag hanging from the plank
+    const ty = s.y + ch * (Math.floor(i / s.cols) + 1) - 16;
+    g.fillStyle = '#ffe14d'; rr(c.x - 22, ty - 2, 44, 24, 6); g.fill();
+    text(String(gd.p), c.x, ty + 11, 18, '#6a3b00');
+  });
+}
+function drawCounter() {
+  const y = LY.counterY, x0 = -OX / K - 10, x1 = (W - OX) / K + 10, y1 = (H - OY) / K + 10;
+  g.fillStyle = '#3f7fe0'; g.fillRect(x0, y, x1 - x0, y1 - y);
+  g.fillStyle = '#76a9f7'; g.fillRect(x0, y, x1 - x0, 12);
+  g.fillStyle = 'rgba(255,255,255,0.08)';
+  for (let x = Math.floor(x0 / 80) * 80; x < x1; x += 80) g.fillRect(x, y + 12, 40, y1 - y);
+}
+function drawBelt() {
+  const b = LY.belt;
+  g.fillStyle = '#1f2229'; rr(b.x, b.y, b.w, b.h, b.h / 2); g.fill();
+  g.save(); rr(b.x + 8, b.y + 8, b.w - 16, b.h - 16, (b.h - 16) / 2); g.clip();
+  g.fillStyle = '#353a45'; g.fillRect(b.x, b.y, b.w, b.h);
+  g.fillStyle = '#2a2e37';
+  const off = (T * 60) % 40;
+  for (let x = b.x - 40 + off; x < b.x + b.w; x += 40) g.fillRect(x, b.y, 18, b.h);
+  g.restore();
+  for (const cx of [b.x + b.h / 2, b.x + b.w - b.h / 2]) {
+    g.fillStyle = '#9aa3ad'; g.beginPath(); g.arc(cx, b.y + b.h / 2, 12, 0, 7); g.fill();
+  }
+}
+function drawScanner() {
+  const s = LY.scan, f = st.flash;
+  g.fillStyle = '#8e97a3'; rr(s.x, s.y, s.w, s.h, 16); g.fill();
+  g.fillStyle = f > 0 ? `rgb(${40 + 80 * f},${40 + 200 * f},${60 + 60 * f})` : '#222a33';
+  rr(s.x + 14, s.y + 14, s.w - 28, s.h - 28, 10); g.fill();
+  const ly = s.y + s.h / 2 + Math.sin(T * 8) * (s.h / 2 - 22);
+  g.save(); g.shadowColor = '#ff2020'; g.shadowBlur = 12 + 20 * f;
+  g.strokeStyle = `rgba(255,${50 + 150 * f},${50 + 150 * f},0.95)`; g.lineWidth = 4 + 6 * f;
+  g.beginPath(); g.moveTo(s.x + 20, ly); g.lineTo(s.x + s.w - 20, ly); g.stroke(); g.restore();
+  g.fillStyle = '#6a7380'; g.fillRect(s.x + s.w / 2 - 20, s.y + s.h - 8, 40, 8);
+}
+function drawDisplay() {
+  const d = LY.disp;
+  g.fillStyle = '#5a6472'; rr(d.x, d.y, d.w, d.h, 16); g.fill();
+  g.fillStyle = '#0f2a33'; rr(d.x + 10, d.y + 10, d.w - 20, d.h - 20, 10); g.fill();
+  const midY = d.y + d.h * 0.36;
+  if (st.last) {
+    const k = Math.min(1, st.last.t / 0.25), s = 50 * (0.6 + 0.4 * k + 0.2 * Math.sin(k * Math.PI));
+    emoji(st.last.e, d.x + d.w * 0.3, midY, s);
+    coin(d.x + d.w * 0.6, midY, 14);
+    text(String(st.last.p), d.x + d.w * 0.6 + 24, midY + 2, 38, '#7CFFB2', 'left');
+  } else {
+    emoji('🛒', d.x + d.w / 2, midY, 44);
+  }
+  g.fillStyle = 'rgba(124,255,178,0.3)'; g.fillRect(d.x + 22, d.y + d.h * 0.6, d.w - 44, 2);
+  const ty = d.y + d.h * 0.78;
+  text('=', d.x + d.w * 0.28, ty, 40, '#7CFFB2');
+  coin(d.x + d.w * 0.46, ty, 16);
+  text(String(st.total), d.x + d.w * 0.46 + 26, ty + 2, 46, '#7CFFB2', 'left', 900);
+}
+function drawBag() {
+  const b = LY.bag, w = b.w, h = b.h * 0.72, bump = st.bagBump;
+  g.save(); g.translate(b.x + b.w / 2 + st.bagOff, b.y + b.h);
+  g.scale(1 + 0.06 * bump, 1 - 0.08 * bump);
+  g.strokeStyle = '#8a5a2b'; g.lineWidth = 10;
+  for (const hx of [-w * 0.2, w * 0.2]) { g.beginPath(); g.arc(hx, -h, w * 0.13, Math.PI, 0); g.stroke(); }
+  const shown = st.bag.slice(-8);
+  shown.forEach((it, i) => emoji(it.e, it.dx * w, -h + 6 - (i % 2) * 16, 70, it.rot));
+  g.fillStyle = '#d9a066';
+  g.beginPath(); g.moveTo(-w / 2, -h); g.lineTo(w / 2, -h); g.lineTo(w / 2 - 10, 0); g.lineTo(-w / 2 + 10, 0); g.closePath(); g.fill();
+  g.fillStyle = '#c48d55'; g.fillRect(-w / 2, -h, w, 14);
+  emoji('🛒', 0, -h * 0.45, 64, 0, 0.9);
+  if (st.bag.length) {
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(w * 0.36, -h * 0.15, 24, 0, 7); g.fill();
+    text(String(st.bag.length), w * 0.36, -h * 0.15 + 1, 28, '#c0392b');
+  }
+  g.restore();
+}
+function drawTerminal() {
+  const t = LY.term, pad = 16, sh = t.h * 0.26;
+  g.fillStyle = 'rgba(0,0,0,0.18)'; rr(t.x + 4, t.y + 8, t.w, t.h, 26); g.fill();
+  g.fillStyle = '#2f3640'; rr(t.x, t.y, t.w, t.h, 26); g.fill();
+  const sx = t.x + pad, sy = t.y + pad, sw = t.w - pad * 2;
+  g.fillStyle = st.mode === 'paid' ? '#2ecc71' : '#cfe8d6'; rr(sx, sy, sw, sh, 12); g.fill();
+  const cx = sx + sw / 2, cy = sy + sh / 2;
+  if (st.mode === 'shop' || st.mode === 'reset') {
+    if (st.total > 0 && st.mode === 'shop') {
+      coin(sx + sw * 0.18, cy, 16);
+      text(String(st.total), sx + sw * 0.18 + 26, cy + 2, 42, '#1d3b2a', 'left', 900);
+      emoji('💳', sx + sw * 0.78, cy, 44 + Math.sin(T * 6) * 5);
+    } else emoji('🙂', cx, cy, 46);
+  } else if (st.mode === 'cardgo') {
+    g.strokeStyle = '#1d3b2a'; g.lineWidth = 5; g.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      g.globalAlpha = 0.4 + 0.6 * ((Math.floor(T * 6) + i) % 3 === 0 ? 1 : 0.3);
+      g.beginPath(); g.arc(cx - 20, cy, 14 + i * 12, -0.8, 0.8); g.stroke();
+    }
+    g.globalAlpha = 1;
+  } else if (st.mode === 'pin') {
+    for (let i = 0; i < 4; i++) {
+      g.beginPath(); g.arc(cx + (i - 1.5) * 44, cy, 14, 0, 7);
+      if (i < st.pin) { g.fillStyle = '#1d3b2a'; g.fill(); } else { g.strokeStyle = '#1d3b2a'; g.lineWidth = 3; g.stroke(); }
+    }
+  } else if (st.mode === 'proc') {
+    g.strokeStyle = '#1d3b2a'; g.lineWidth = 7; g.lineCap = 'round';
+    g.beginPath(); g.arc(cx, cy, sh * 0.28, T * 8, T * 8 + 4.2); g.stroke();
+  } else {
+    emoji('✅', cx, cy, 56 * Math.min(1, 0.4 + st.t * 3));
+  }
+  const pinMode = st.mode === 'pin';
+  keyRects().forEach((r, i) => {
+    const k = KEYS[i], h = keyHit[i], inset = 3 * h;
+    const base = k === '✖' ? '#e74c3c' : k === '✔' ? '#2ecc71' : '#eef1f5';
+    g.fillStyle = 'rgba(0,0,0,0.35)'; rr(r.x, r.y + 4, r.w, r.h, 10); g.fill();
+    g.fillStyle = base; rr(r.x + inset, r.y + inset * 1.5, r.w - inset * 2, r.h - inset * 2, 10); g.fill();
+    if (pinMode && Math.sin(T * 5 + i * 0.5) > 0.6) { g.fillStyle = 'rgba(255,255,160,0.35)'; g.fill(); }
+    const fs = Math.min(r.h * 0.62, 40);
+    text(k, r.x + r.w / 2, r.y + r.h / 2 + inset + 2, fs, k === '✖' || k === '✔' ? '#fff' : '#2f3640', 'center', 900);
+  });
+}
+function drawCard() {
+  const c = LY.card, w = c.w, h = c.h;
+  const payable = st.mode === 'shop' && st.total > 0 && card.state === 'home';
+  const s = payable ? 1 + 0.05 * Math.sin(T * 6) : card.state === 'tap' ? 0.9 : 1;
+  g.save(); g.translate(card.x, card.y); g.rotate(Math.sin(card.wig * 40) * 0.12 * card.wig); g.scale(s, s);
+  g.fillStyle = 'rgba(0,0,0,0.2)'; rr(-w / 2 + 4, -h / 2 + 8, w, h, 16); g.fill();
+  const gr = g.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2);
+  gr.addColorStop(0, '#5b5bf0'); gr.addColorStop(1, '#c04bd8');
+  g.fillStyle = gr; rr(-w / 2, -h / 2, w, h, 16); g.fill();
+  g.fillStyle = '#f2c94c'; rr(-w * 0.36, -h * 0.18, w * 0.18, h * 0.26, 5); g.fill();
+  g.strokeStyle = '#c9a227'; g.lineWidth = 2; g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 3; g.lineCap = 'round';
+  for (let i = 0; i < 3; i++) { g.beginPath(); g.arc(w * 0.25, -h * 0.06, 8 + i * 8, -0.7, 0.7); g.stroke(); }
+  text('•••• 1234', -w * 0.36, h * 0.3, 20, 'rgba(255,255,255,0.9)', 'left', 700);
+  g.fillStyle = 'rgba(255,255,255,0.18)'; g.beginPath(); g.arc(w * 0.38, h * 0.3, 16, 0, 7); g.fill();
+  g.beginPath(); g.arc(w * 0.28, h * 0.3, 16, 0, 7); g.fill();
+  g.restore();
+}
+function drawItems() {
+  const order = { belt: 0, fly: 1, moving: 1, scan: 2, tobag: 2, drag: 3 };
+  [...items].sort((a, b) => order[a.state] - order[b.state]).forEach(it => {
+    const rot = Math.sin(it.wig * 40) * 0.25 * it.wig + (it.state === 'drag' ? Math.sin(T * 10) * 0.08 : 0);
+    const s = it.state === 'drag' ? ITEM * 1.2 : ITEM;
+    if (it.state === 'belt' || it.state === 'drag') {
+      g.fillStyle = 'rgba(0,0,0,0.2)'; g.beginPath(); g.ellipse(it.x, it.y + s * 0.42, s * 0.36, s * 0.1, 0, 0, 7); g.fill();
+    }
+    emoji(it.e, it.x, it.y, s, rot);
+  });
+}
+function drawReceipt() {
+  if (st.mode !== 'paid') return;
+  const d = LY.disp, lines = st.scanned.slice(-8), more = st.scanned.length > 8;
+  const rw = Math.min(d.w * 0.8, 230), lh = 36, fullH = 40 + (lines.length + (more ? 1 : 0)) * lh + 70;
+  const h = Math.min(fullH, st.receiptT * 380), x = d.x + (d.w - rw) / 2, yb = d.y + 6, top = yb - h;
+  g.save(); g.beginPath(); g.rect(x - 10, top - 10, rw + 20, h + 10); g.clip();
+  g.fillStyle = 'rgba(0,0,0,0.15)'; g.fillRect(x + 5, top + 5, rw, fullH);
+  g.fillStyle = '#fffdf6'; g.fillRect(x, top, rw, fullH);
+  g.beginPath(); g.moveTo(x, top);
+  for (let i = 0; i <= 12; i++) g.lineTo(x + rw * i / 12, top + (i % 2 ? 8 : 0));
+  g.lineTo(x + rw, top); g.fillStyle = '#c4e6fb'; g.fill();
+  let y = top + 34;
+  if (more) { text('…', x + rw / 2, y, 26, '#666'); y += lh; }
+  for (const it of lines) {
+    emoji(it.e, x + 34, y, 28);
+    text(String(it.p), x + rw - 24, y + 1, 26, '#333', 'right');
+    y += lh;
+  }
+  g.strokeStyle = '#999'; g.setLineDash([6, 6]); g.lineWidth = 2;
+  g.beginPath(); g.moveTo(x + 14, y - 8); g.lineTo(x + rw - 14, y - 8); g.stroke(); g.setLineDash([]);
+  coin(x + 34, y + 22, 14);
+  text(String(st.total), x + rw - 24, y + 24, 34, '#111', 'right', 900);
+  g.restore();
+}
+
+/* A pointing hand shows the next step after a few idle seconds. */
+function hintTarget() {
+  if (st.mode === 'shop') {
+    const q = items.filter(i => i.state === 'belt').sort((a, b) => b.x - a.x);
+    if (q.length) {
+      const [sx, sy] = scanCenter(), k = (T % 1.6) / 1.6;
+      return [lerp(q[0].x, sx, ease(Math.min(1, k * 1.3))), lerp(q[0].y, sy, ease(Math.min(1, k * 1.3)))];
+    }
+    if (st.total > 0 && card.state === 'home') return [card.x, card.y];
+    const c = shelfCell(Math.floor(T / 3) % GOODS.length); return [c.x, c.y];
+  }
+  if (st.mode === 'pin') { const r = keyRects()[4]; return [r.x + r.w / 2, r.y + r.h / 2]; }
+  return null;
+}
+function drawHint() {
+  if (st.idle < 4) return;
+  const p = hintTarget(); if (!p) return;
+  emoji('👆', p[0] + 10, p[1] + 50 + Math.abs(Math.sin(T * 5)) * 14, 62, -0.2, 0.95);
+}
+
+function draw() {
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawBackground();
+  g.setTransform(DPR * K, 0, 0, DPR * K, DPR * OX, DPR * OY);
+  drawShelf(); drawCounter(); drawBelt(); drawScanner(); drawDisplay();
+  drawBag(); drawTerminal(); drawCard(); drawItems(); drawReceipt(); drawParts(); drawHint();
+  g.setTransform(DPR, 0, 0, DPR, 0, 0);
+  drawHomeBtn();
+}
+
+/* Parent-only way back to the /play/ menu: press and hold the house. */
+const HB = { id: null, t: 0, HOLD: 1.2 };
+function hbPos() { const r = 26; return { x: W - r - 10, y: SAFE_TOP + r + 10, r }; }
+function drawHomeBtn() {
+  const p = hbPos();
+  g.globalAlpha = 0.85; g.fillStyle = '#fff'; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 7); g.fill(); g.globalAlpha = 1;
+  emoji('🏠', p.x, p.y + 2, p.r * 1.1);
+  if (HB.id !== null) {
+    g.lineWidth = p.r * 0.22; g.strokeStyle = '#ff4d4d'; g.lineCap = 'round';
+    g.beginPath(); g.arc(p.x, p.y, p.r * 1.05, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, HB.t / HB.HOLD)); g.stroke();
+  }
+}
+
+/* ---------- input ---------- */
+const ptrs = new Map();
+function extras() {
+  try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') { extras(); if (ac && ac.state !== 'running') ac.resume(); }
+});
+
+cv.addEventListener('pointerdown', e => {
+  e.preventDefault(); unlockAudio();
+  if (!st.hello) { st.hello = true; extras(); }
+  st.idle = 0;
+  const hp = hbPos();
+  if (Math.hypot(e.clientX - hp.x, e.clientY - hp.y) < hp.r * 1.3) { HB.id = e.pointerId; HB.t = 0; return; }
+  const [x, y] = toStage(e.clientX, e.clientY);
+  const P = { sx: x, sy: y, kind: 'none' };
+  ptrs.set(e.pointerId, P);
+
+  if (st.mode === 'paid' && st.t > 1.5) { startReset(); return; }
+
+  const gi = shelfAt(x, y);
+  if (gi >= 0) { P.kind = 'shelf'; P.gi = gi; return; }
+
+  // goods on the belt (top-most first)
+  const onBelt = items.filter(i => i.state === 'belt').reverse();
+  for (const it of onBelt) {
+    if (Math.abs(x - it.x) < ITEM * 0.6 && Math.abs(y - it.y) < ITEM * 0.6) { P.kind = 'belt'; P.it = it; return; }
+  }
+  if (card.state === 'home' && Math.abs(x - card.x) < LY.card.w / 2 + 10 && Math.abs(y - card.y) < LY.card.h / 2 + 10) {
+    P.kind = 'card'; return;
+  }
+  if (inR(x, y, LY.scan, 10)) {
+    const q = items.filter(i => i.state === 'belt').sort((a, b) => b.x - a.x);
+    if (q.length) scanItem(q[0]); else { sfx.beep(); st.flash = 0.6; }
+    return;
+  }
+  const kr = keyRects();
+  for (let i = 0; i < kr.length; i++) if (inR(x, y, kr[i], 3)) { pressKey(i); return; }
+  if (!st.hello2) { st.hello2 = true; say(L.hello); }
+  sparkleAt(x, y);
+}, { passive: false });
+
+cv.addEventListener('pointermove', e => {
+  e.preventDefault();
+  const P = ptrs.get(e.pointerId); if (!P) return;
+  const [x, y] = toStage(e.clientX, e.clientY);
+  const far = Math.hypot(x - P.sx, y - P.sy) > 14;
+  if (P.kind === 'shelf' && far) {
+    const it = takeFromShelf(P.gi, x, y);
+    if (it) { it.state = 'drag'; P.kind = 'drag'; P.it = it; } else P.kind = 'none';
+  } else if (P.kind === 'belt' && far) {
+    P.it.state = 'drag'; P.kind = 'drag';
+  } else if (P.kind === 'card' && far && card.state === 'home') {
+    card.state = 'drag'; P.kind = 'cardDrag';
+  }
+  if (P.kind === 'drag') {
+    P.it.x = x; P.it.y = y - 20;
+    if (st.mode === 'shop' && inR(P.it.x, P.it.y, LY.scan, 10)) { startScan(P.it); P.kind = 'none'; }
+  } else if (P.kind === 'cardDrag') {
+    card.x = x; card.y = y;
+  }
+}, { passive: false });
+
+function end(e) {
+  if (e.pointerId === HB.id) HB.id = null;
+  const P = ptrs.get(e.pointerId); if (!P) return;
+  ptrs.delete(e.pointerId);
+  const payable = st.mode === 'shop' && st.total > 0;
+  if (P.kind === 'shelf') {
+    const it = takeFromShelf(P.gi);
+    if (it) sendToBelt(it);
+  } else if (P.kind === 'belt') {
+    scanItem(P.it);
+  } else if (P.kind === 'drag') {
+    P.it.state = 'fly';
+    if (inR(P.it.x, P.it.y, LY.belt, 30)) P.it.state = 'belt'; else sendToBelt(P.it);
+  } else if (P.kind === 'card') {
+    if (payable) insertCard(); else { card.wig = 0.5; sfx.nope(); }
+  } else if (P.kind === 'cardDrag') {
+    if (payable && inR(card.x, card.y, LY.term, 40)) insertCard();
+    else {
+      card.state = 'tw'; const [hx, hy] = cardHome();
+      tween(card, hx, hy, 0.4, 20, () => { card.state = 'home'; });
+      if (!payable) sfx.nope();
+    }
+  }
+}
+cv.addEventListener('pointerup', end);
+cv.addEventListener('pointercancel', end);
+for (const ev of ['gesturestart', 'gesturechange', 'dblclick', 'contextmenu']) document.addEventListener(ev, e => e.preventDefault(), { passive: false });
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
+/* ---------- main loop ---------- */
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 200));
+resize();
+[card.x, card.y] = cardHome();
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; T += dt;
+  if (HB.id !== null && (HB.t += dt) >= HB.HOLD) { HB.id = null; location.href = '../play/' + location.search; }
+  update(dt); updateParts(dt); draw();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
