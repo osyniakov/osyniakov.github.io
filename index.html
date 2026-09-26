@@ -1,1 +1,442 @@
-Under construction
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oleksii Syniakov</title>
+<meta name="description" content="Oleksii Syniakov — software engineer in Munich. Open-source contributions to Quickwit and Tantivy, supply-chain security, fuzzing, and agent-driven side projects.">
+<meta property="og:title" content="Oleksii Syniakov">
+<meta property="og:description" content="Search infrastructure, supply-chain security and agent-driven engineering.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://osyniakov.github.io/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23121212'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='28' font-weight='700' text-anchor='middle' fill='%23ffb547'%3EOS%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f7f5f0;
+    --surface: #ffffff;
+    --text: #17150f;
+    --muted: #5f5a4f;
+    --line: #e3ded2;
+    --accent: #c46a00;
+    --accent-soft: #fbe9d0;
+    --ok: #1d7a46;
+    --ok-soft: #dcf1e4;
+    --lab: #5b4bc4;
+    --lab-soft: #e8e5fb;
+    --lock: #7a6f5c;
+    --lock-soft: #eee9df;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f0f0e;
+      --surface: #181816;
+      --text: #f2efe8;
+      --muted: #a39d90;
+      --line: #2b2a26;
+      --accent: #ffb547;
+      --accent-soft: #3a2a12;
+      --ok: #6fd69b;
+      --ok-soft: #13301f;
+      --lab: #a99cff;
+      --lab-soft: #262040;
+      --lock: #bfb5a3;
+      --lock-soft: #2a2823;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f0f0e;
+    --surface: #181816;
+    --text: #f2efe8;
+    --muted: #a39d90;
+    --line: #2b2a26;
+    --accent: #ffb547;
+    --accent-soft: #3a2a12;
+    --ok: #6fd69b;
+    --ok-soft: #13301f;
+    --lab: #a99cff;
+    --lab-soft: #262040;
+    --lock: #bfb5a3;
+    --lock-soft: #2a2823;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+  }
+  a { color: inherit; text-decoration-color: var(--accent); text-underline-offset: 3px; }
+  a:hover { color: var(--accent); }
+  .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 16px; }
+
+  /* ---------- hero ---------- */
+  header.hero { padding: 72px 0 48px; border-bottom: 1px solid var(--line); }
+  .prompt { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .prompt b { color: var(--accent); font-weight: 600; }
+  h1 {
+    font-size: clamp(44px, 9vw, 88px);
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    font-weight: 800;
+    margin: 0 0 22px;
+  }
+  h1 span { color: var(--accent); }
+  .lede { font-size: clamp(18px, 2.4vw, 22px); color: var(--muted); max-width: 720px; margin: 0 0 28px; }
+  .lede strong { color: var(--text); font-weight: 600; }
+  .links { display: flex; flex-wrap: wrap; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--surface);
+    text-decoration: none; font-weight: 500; font-size: 15px;
+    transition: border-color .15s, transform .15s;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--text); transform: translateY(-1px); }
+  .btn.primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn.primary:hover { color: var(--bg); background: var(--accent); border-color: var(--accent); }
+  .btn svg { width: 18px; height: 18px; fill: currentColor; flex: none; }
+
+  .facts {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+    margin: 40px 0 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: var(--surface);
+  }
+  .fact { padding: 18px 20px; border-right: 1px solid var(--line); }
+  .fact:last-child { border-right: 0; }
+  .fact .n { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+  .fact .l { font-size: 13px; color: var(--muted); }
+
+  /* ---------- sections ---------- */
+  section { padding: 56px 0; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  .eyebrow { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); margin: 0 0 8px; }
+  h2 { font-size: clamp(26px, 4vw, 34px); letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 12px; }
+  .intro { color: var(--muted); max-width: 720px; margin: 0 0 28px; }
+
+  .themes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .theme { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; }
+  .theme h3 { font-size: 17px; margin: 0 0 6px; }
+  .theme p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px; display: flex; flex-direction: column; gap: 10px;
+  }
+  .card.feature { grid-column: 1 / -1; }
+  .card h3 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+  .card h3 a { text-decoration: none; }
+  .card p { margin: 0; color: var(--muted); }
+  .card ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 15px; }
+  .card ul li { margin: 2px 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .tag {
+    font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px;
+    padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted);
+  }
+  .badge { font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 999px; }
+  .badge.merged { background: var(--ok-soft); color: var(--ok); }
+  .badge.lab { background: var(--lab-soft); color: var(--lab); }
+  .badge.private { background: var(--lock-soft); color: var(--lock); }
+  .badge.live { background: var(--accent-soft); color: var(--accent); }
+  .date { font-size: 13px; color: var(--muted); margin-left: auto; }
+
+  /* ---------- contributions list ---------- */
+  .repo-group { margin: 0 0 28px; }
+  .repo-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin: 0 0 10px; }
+  .repo-head h3 { font-size: 20px; margin: 0; }
+  .repo-head p { margin: 0; color: var(--muted); font-size: 15px; }
+  .prs { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+  .prs li { display: grid; grid-template-columns: 92px 1fr auto; gap: 14px; align-items: baseline; padding: 11px 16px; border-top: 1px solid var(--line); }
+  .prs li:first-child { border-top: 0; }
+  .prs .num { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; color: var(--accent); text-decoration: none; }
+  .prs .num:hover { text-decoration: underline; }
+  .prs .t { font-size: 15px; }
+  .prs .d { font-size: 13px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+  /* ---------- timeline ---------- */
+  .timeline { list-style: none; margin: 0; padding: 0; position: relative; }
+  .timeline::before { content: ''; position: absolute; left: 7px; top: 6px; bottom: 6px; width: 2px; background: var(--line); }
+  .timeline li { position: relative; padding: 0 0 22px 32px; }
+  .timeline li::before {
+    content: ''; position: absolute; left: 0; top: 6px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--bg); border: 3px solid var(--accent);
+  }
+  .timeline .when { font-size: 13px; color: var(--muted); }
+  .timeline .what { font-weight: 600; }
+  .timeline p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+
+  footer { padding: 36px 0 56px; color: var(--muted); font-size: 14px; }
+  footer .row { display: flex; flex-wrap: wrap; gap: 12px 20px; justify-content: space-between; }
+
+  .theme-toggle {
+    position: fixed; top: 14px; right: 14px; z-index: 5;
+    width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); cursor: pointer; font-size: 16px;
+  }
+
+  @media (max-width: 760px) {
+    header.hero { padding: 56px 0 36px; }
+    .facts { grid-template-columns: repeat(2, 1fr); }
+    .fact:nth-child(2) { border-right: 0; }
+    .fact:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+    .themes, .cards { grid-template-columns: 1fr; }
+    .prs li { grid-template-columns: 1fr auto; gap: 2px 12px; }
+    .prs .num { grid-column: 1; }
+    .prs .d { grid-column: 2; grid-row: 1; }
+    .prs .t { grid-column: 1 / -1; }
+    section { padding: 44px 0; }
+  }
+</style>
+</head>
+<body>
+
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle color theme" title="Toggle theme">◐</button>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="prompt mono"><b>~/osyniakov</b> $ whoami</p>
+    <h1>Oleksii<br>Syniakov<span>.</span></h1>
+    <p class="lede">
+      Software engineer in Munich. I contribute to the <strong>Quickwit</strong> and
+      <strong>Tantivy</strong> search engines, harden open-source <strong>supply chains</strong>,
+      break parsers with <strong>fuzzers</strong>, and build small products end-to-end with
+      <strong>AI coding agents</strong>.
+    </p>
+    <ul class="links">
+      <li><a class="btn primary" href="https://www.linkedin.com/in/osyniakov" rel="me noopener" target="_blank">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.14 1.45-2.14 2.94v5.67H9.35V9h3.41v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.56V9h3.56v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.23.79 24 1.77 24h20.45c.98 0 1.78-.77 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/></svg>
+        LinkedIn</a></li>
+      <li><a class="btn" href="https://github.com/osyniakov" rel="me noopener" target="_blank">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.2.5-2.3 1.3-3.1-.2-.4-.6-1.6 0-3.2 0 0 1-.3 3.4 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.2.8.8 1.3 1.9 1.3 3.2 0 4.6-2.8 5.6-5.5 5.9.5.4.9 1.1.9 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>
+        GitHub</a></li>
+      <li><a class="btn" href="#contributions">Open-source work</a></li>
+      <li><a class="btn" href="#projects">Projects &amp; experiments</a></li>
+    </ul>
+
+    <div class="facts" role="list">
+      <div class="fact" role="listitem"><div class="n">18</div><div class="l">PRs merged upstream</div></div>
+      <div class="fact" role="listitem"><div class="n">3</div><div class="l">quickwit-oss projects</div></div>
+      <div class="fact" role="listitem"><div class="n">3</div><div class="l">Tantivy panics fixed after fuzzing</div></div>
+      <div class="fact" role="listitem"><div class="n">150+</div><div class="l">agent-driven commits, Aug 2026</div></div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<section id="focus">
+  <div class="wrap">
+    <p class="eyebrow mono">// what I'm working on</p>
+    <h2>Three threads run through my recent work</h2>
+    <p class="intro">A summary of the last twelve months of commits, PRs and experiments across my public and private repositories.</p>
+    <div class="themes">
+      <div class="theme">
+        <h3>🔒 Supply-chain security</h3>
+        <p>Pinning every GitHub Action, Docker image and Python/JS dependency by hash, least-privilege workflow tokens, and OpenSSF Scorecard across the Quickwit ecosystem.</p>
+      </div>
+      <div class="theme">
+        <h3>🧪 Fuzzing search engines</h3>
+        <p>cargo-fuzz harnesses with ClusterFuzzLite CI for Tantivy and Quickwit, seed corpora, and fixes for the panics they uncover in query parsing and columnar storage.</p>
+      </div>
+      <div class="theme">
+        <h3>🤖 Agentic engineering</h3>
+        <p>Shipping full products with Claude Code: issue-tracked epics, real-app Playwright E2E, GitHub-issue-driven automation, and an LLM-maintained knowledge base.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="contributions">
+  <div class="wrap">
+    <p class="eyebrow mono">// merged upstream</p>
+    <h2>Open-source contributions</h2>
+    <p class="intro">Pull requests merged into projects I don't own. Most of it started with the OpenSSF Scorecard findings in quickwit-oss/quickwit#5937 and #5945 and spread across the organisation.</p>
+
+    <div class="repo-group">
+      <div class="repo-head">
+        <h3><a href="https://github.com/quickwit-oss/quickwit" target="_blank" rel="noopener">quickwit-oss/quickwit</a></h3>
+        <p>Cloud-native search engine for logs and traces (Rust)</p>
+        <span class="badge merged">14 merged</span>
+      </div>
+      <ul class="prs">
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/6202" target="_blank" rel="noopener">#6202</a><span class="t">Improve cluster-sizing docs for control plane, metastore and janitor</span><span class="d">Mar 2026</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/6191" target="_blank" rel="noopener">#6191</a><span class="t">Redact sensitive credentials in the developer API debug output</span><span class="d">Mar 2026</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5975" target="_blank" rel="noopener">#5975</a><span class="t">Drop unused cbench workflow</span><span class="d">Nov 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5974" target="_blank" rel="noopener">#5974</a><span class="t">Explicitly pass the required Rust toolchain to the action</span><span class="d">Nov 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5969" target="_blank" rel="noopener">#5969</a><span class="t">Add OpenSSF Scorecard workflow</span><span class="d">Nov 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5967" target="_blank" rel="noopener">#5967</a><span class="t">Use the standard action to install Rust</span><span class="d">Nov 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5965" target="_blank" rel="noopener">#5965</a><span class="t">Pin pipenv and its dependencies by hash in workflows</span><span class="d">Nov 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5956" target="_blank" rel="noopener">#5956</a><span class="t">Delete obsolete workflow</span><span class="d">Oct 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5949" target="_blank" rel="noopener">#5949</a><span class="t">Pin Python packages in workflows</span><span class="d">Oct 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5946" target="_blank" rel="noopener">#5946</a><span class="t">Least-privilege token permissions in workflows</span><span class="d">Oct 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5944" target="_blank" rel="noopener">#5944</a><span class="t">Pin GitHub Action dependencies to commit SHAs</span><span class="d">Oct 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5943" target="_blank" rel="noopener">#5943</a><span class="t">Pin remaining Docker container images</span><span class="d">Oct 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5939" target="_blank" rel="noopener">#5939</a><span class="t">Pin Docker images for the production build</span><span class="d">Oct 2025</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/quickwit/pull/5938" target="_blank" rel="noopener">#5938</a><span class="t">Pin UI dependencies to exact versions</span><span class="d">Oct 2025</span></li>
+      </ul>
+    </div>
+
+    <div class="repo-group">
+      <div class="repo-head">
+        <h3><a href="https://github.com/quickwit-oss/tantivy" target="_blank" rel="noopener">quickwit-oss/tantivy</a></h3>
+        <p>Full-text search engine library, the Rust answer to Lucene</p>
+        <span class="badge merged">2 merged</span>
+      </div>
+      <ul class="prs">
+        <li><a class="num" href="https://github.com/quickwit-oss/tantivy/pull/2909" target="_blank" rel="noopener">#2909</a><span class="t">Add OpenSSF Scorecard workflow</span><span class="d">Apr 2026</span></li>
+        <li><a class="num" href="https://github.com/quickwit-oss/tantivy/pull/2896" target="_blank" rel="noopener">#2896</a><span class="t">Pin GitHub Actions to full commit SHAs and restrict token permissions</span><span class="d">Apr 2026</span></li>
+      </ul>
+    </div>
+
+    <div class="repo-group">
+      <div class="repo-head">
+        <h3>Quickwit Helm charts</h3>
+        <p>Kubernetes deployment charts for Quickwit</p>
+        <span class="badge merged">2 merged</span>
+      </div>
+      <ul class="prs">
+        <li><a class="num" href="https://github.com/osyniakov/quickwit-helm-charts/commit/653b17f" target="_blank" rel="noopener">#144</a><span class="t">Enable Dependabot</span><span class="d">Nov 2025</span></li>
+        <li><a class="num" href="https://github.com/osyniakov/quickwit-helm-charts/commit/dbb3f96" target="_blank" rel="noopener">#143</a><span class="t">Apply security best practices to workflows</span><span class="d">Oct 2025</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="lab">
+  <div class="wrap">
+    <p class="eyebrow mono">// in the lab</p>
+    <h2>Current experiments on my forks</h2>
+    <p class="intro">Work in progress that hasn't gone upstream yet: fuzzing, compatibility testing, and architecture docs for agents.</p>
+    <div class="cards">
+      <article class="card">
+        <div class="meta"><span class="badge lab">experiment</span><span class="tag">rust</span><span class="tag">cargo-fuzz</span><span class="date">Sep 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/tantivy/tree/claude/fuzz-open-findings" target="_blank" rel="noopener">Fuzzing Tantivy</a></h3>
+        <p>cargo-fuzz harness with ClusterFuzzLite CI on every PR, a seed corpus for the container-format targets, and fixes for three panics the new targets found. Columnar stats and compact-space reads are now bounds-checked.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge lab">experiment</span><span class="tag">rust</span><span class="tag">ClusterFuzzLite</span><span class="date">Sep 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/quickwit/tree/claude/fork-upstream-sync-f19f1e" target="_blank" rel="noopener">Public-API fuzz targets for Quickwit</a></h3>
+        <p>Fuzz targets with measured execution counts. Found a query-grammar panic, fixed by bumping Tantivy, and clamped OTLP span durations when a span ends before it starts.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge lab">fix</span><span class="tag">es-compat</span><span class="date">Sep 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/quickwit/tree/claude/fix-es-delete-scroll-routing" target="_blank" rel="noopener">Elasticsearch API compatibility</a></h3>
+        <p>Made <code class="mono">DELETE /_search/scroll</code> reachable, with regression tests, and investigated support for <code class="mono">missing: _first</code> in ES sort.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge lab">e2e</span><span class="tag">starrocks</span><span class="date">Apr–Sep 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/quickwit/tree/claude/branch-sync-validate-u9aipu" target="_blank" rel="noopener">Quickwit × StarRocks</a></h3>
+        <p>An end-to-end harness that runs StarRocks' Elasticsearch connector against Quickwit, plus a gap report I verified live against a binary built from main.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge lab">fix</span><span class="tag">query-parser</span><span class="date">Apr 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/tantivy/tree/claude/fix-exist-query-panic-99K7x" target="_blank" rel="noopener">Exists-query panic in Tantivy</a></h3>
+        <p>Prevents a panic on bare input like <code class="mono">*:</code> and checks that the field exists when an Exists query is parsed.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge lab">docs</span><span class="tag">LikeC4</span><span class="date">Sep 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/quickwit/tree/claude/layered-architecture-likec4-docs-l34q6x" target="_blank" rel="noopener">Architecture as code for agents</a></h3>
+        <p>Layered architecture docs for Quickwit as LikeC4 diagrams, written so AI coding agents can find their way around the codebase.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="projects">
+  <div class="wrap">
+    <p class="eyebrow mono">// built end-to-end</p>
+    <h2>Projects</h2>
+    <p class="intro">Products and tools I built for myself, mostly pair-programmed with Claude Code. Some are private repositories; I'm happy to walk through them.</p>
+    <div class="cards">
+      <article class="card feature">
+        <div class="meta"><span class="badge live">flagship</span><span class="tag">FastAPI</span><span class="tag">React PWA</span><span class="tag">Claude vision</span><span class="tag">Playwright</span><span class="tag">Railway</span><span class="date">Aug 2026</span></div>
+        <h3><a href="https://github.com/osyniakov/sandbox" target="_blank" rel="noopener">Basement Declutter</a></h3>
+        <p>Take a photo of something in the basement and get a verdict: sell, give away or throw away, with a suggested price. A background pipeline identifies the item with Claude vision, searches Kleinanzeigen for comparable listings, and calculates a condition-aware median price. It then drafts the listing title and description for you.</p>
+        <ul>
+          <li>150+ commits in ten days, planned as epics and tasks with the <span class="mono">beads</span> issue tracker</li>
+          <li>Google sign-in with an email allowlist, signed sessions, and an inventory with status tracking</li>
+          <li>Playwright E2E suite runs against the real deployed app on Railway, packaged as its own Docker image</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge private">private</span><span class="tag">Claude Code</span><span class="tag">GitHub Actions</span><span class="date">Sep 2026</span></div>
+        <h3>llm-wiki</h3>
+        <p>A personal knowledge base built on Andrej Karpathy's "LLM Wiki" pattern. An agent ingests raw sources into an interlinked markdown wiki instead of re-searching documents with RAG on every question.</p>
+        <ul>
+          <li>Open an issue labelled <span class="mono">ingest</span> and Claude opens a PR with the new wiki pages</li>
+          <li>Built on Munich open data: the rent index, Kitas, playgrounds, MVV lines, public toilets, development plans</li>
+          <li>Lint passes on demand catch broken backlinks and contradictions</li>
+        </ul>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge private">private</span><span class="tag">Temporal</span><span class="tag">ETL</span><span class="date">Aug 2026</span></div>
+        <h3>temporal-etl-poc</h3>
+        <p>A newly started proof of concept for durable, retryable ETL pipelines on Temporal workflows.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge live">live</span><span class="tag">canvas</span><span class="tag">iPad</span><span class="date">Sep 2026</span></div>
+        <h3><a href="/play/">Play! &amp; Shop!</a></h3>
+        <p>Two touch games for toddlers, drawn on a single canvas with no dependencies. <a href="/play/">Play</a> is a tap-and-discover game. <a href="/shop/">Shop</a> is a supermarket cashier game. Both have German voice-over and install to the iPad home screen.</p>
+      </article>
+      <article class="card">
+        <div class="meta"><span class="badge live">live</span><span class="tag">RAG</span><span class="tag">widget</span><span class="date">Apr 2025</span></div>
+        <h3><a href="/m3sh.html">m3sh docs assistant</a></h3>
+        <p>A weekend demo that embeds a retrieval-augmented Q&amp;A widget on top of a documentation collection.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="timeline">
+  <div class="wrap">
+    <p class="eyebrow mono">// git log --oneline</p>
+    <h2>Timeline</h2>
+    <ol class="timeline">
+      <li><div class="when mono">Sep 2026</div><div class="what">Fuzzing Tantivy &amp; Quickwit · llm-wiki · toddler games</div><p>ClusterFuzzLite harnesses, ES-compat fixes, StarRocks gap report, and LikeC4 architecture docs.</p></li>
+      <li><div class="when mono">Aug 2026</div><div class="what">Basement Declutter</div><p>Took an AI-assisted resale app from an empty repo to a Railway deployment with real-app E2E tests.</p></li>
+      <li><div class="when mono">Mar–Apr 2026</div><div class="what">Security fix in Quickwit · Tantivy hardening</div><p>Stopped credentials leaking in developer API output; brought pinned actions and Scorecard to Tantivy.</p></li>
+      <li><div class="when mono">Oct–Nov 2025</div><div class="what">Quickwit supply-chain hardening</div><p>A dozen PRs pinning dependencies and tightening CI permissions across Quickwit and its Helm charts.</p></li>
+      <li><div class="when mono">2016–2020</div><div class="what">JVM &amp; event-sourcing years</div><p>Spring Boot, Axon/CQRS microservices, React front-ends, OWASP dependency checking.</p></li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap row">
+    <span>© 2026 Oleksii Syniakov · Munich</span>
+    <span>
+      <a href="https://www.linkedin.com/in/osyniakov" rel="me noopener" target="_blank">LinkedIn</a> ·
+      <a href="https://github.com/osyniakov" rel="me noopener" target="_blank">GitHub</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    try {
+      var saved = localStorage.getItem('theme');
+      if (saved === 'light' || saved === 'dark') root.setAttribute('data-theme', saved);
+    } catch (e) {}
+    document.getElementById('themeToggle').addEventListener('click', function () {
+      var current = root.getAttribute('data-theme') ||
+        (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+      var next = current === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('theme', next); } catch (e) {}
+    });
+  })();
+</script>
+</body>
+</html>
