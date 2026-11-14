@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Doctor!">
+<meta name="theme-color" content="#d9f3ee">
+<title>Doctor!</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #d9f3ee; overscroll-behavior: none; }
+  * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #sat { position: fixed; top: 0; left: 0; width: 1px; height: env(safe-area-inset-top, 0px); visibility: hidden; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="sat"></div>
+<script src="../play/kit.js"></script>
+<script>
+'use strict';
+/* Animal doctor: a sick animal sits on the table. Listen to its heart, take its temperature,
+   put a plaster on the boo-boo and give it a treat. Then the next patient comes in. */
+
+const PETS = [
+  { e: '🐻', k: 'bear', treat: '🍯' }, { e: '🐰', k: 'rabbit', treat: '🥕' }, { e: '🐶', k: 'dog', treat: '🦴' },
+  { e: '🐱', k: 'cat', treat: '🐟' }, { e: '🐵', k: 'monkey', treat: '🍌' }, { e: '🐷', k: 'pig', treat: '🍎' }
+];
+pickLang({
+  en: {
+    code: 'en-US', steth: 'Listen to the heart! Boom, boom!', thermo: 'Thermometer! No fever!', band: 'A plaster! All better!',
+    treat: 'Yum, yum!', done: 'All better! Thank you, doctor!',
+    pets: { bear: 'The bear is sick!', rabbit: 'The bunny is sick!', dog: 'The doggy is sick!', cat: 'The kitty is sick!', monkey: 'The monkey is sick!', pig: 'The piggy is sick!' }
+  },
+  uk: {
+    code: 'uk-UA', steth: 'Слухаємо серденько! Тук-тук!', thermo: 'Градусник! Температури немає!', band: 'Пластир! Вже не болить!',
+    treat: 'Ням-ням!', done: 'Все добре! Дякую, лікарю!',
+    pets: { bear: 'Ведмедик захворів!', rabbit: 'Зайчик захворів!', dog: 'Песик захворів!', cat: 'Котик захворів!', monkey: 'Мавпочка захворіла!', pig: 'Свинка захворіла!' }
+  },
+  de: {
+    code: 'de-DE', steth: 'Wir hören das Herz! Bumm, bumm!', thermo: 'Fieberthermometer! Kein Fieber!', band: 'Ein Pflaster! Schon besser!',
+    treat: 'Mmm, lecker!', done: 'Wieder gesund! Danke, Doktor!',
+    pets: { bear: 'Der Bär ist krank!', rabbit: 'Der Hase ist krank!', dog: 'Der Hund ist krank!', cat: 'Die Katze ist krank!', monkey: 'Der Affe ist krank!', pig: 'Das Schwein ist krank!' }
+  }
+});
+
+const VL = { w: 1024, h: 768, pet: { x: 512, y: 250, s: 320 }, hearts: { x: 512, y: 500 }, tray: { x: 512, y: 650, gap: 200, r: 72 } };
+const VP = { w: 768, h: 1024, pet: { x: 384, y: 360, s: 400 }, hearts: { x: 384, y: 690 }, tray: { x: 384, y: 870, gap: 180, r: 72 } };
+const tableY = () => LY.pet.y + LY.pet.s * 0.47;
+
+/* where each tool goes on the patient, in units of the face size, and how long it works */
+const SPEC = {
+  steth: { e: '🩺', dx: 0, dy: 0.4, d: 2.3 },
+  thermo: { e: '🌡️', dx: 0.2, dy: 0.24, d: 1.9 },
+  band: { e: '🩹', dx: -0.2, dy: -0.3, d: 0.35 },
+  treat: { e: '', dx: 0, dy: 0.24, d: 1.3 }
+};
+const ORDER = ['steth', 'thermo', 'band', 'treat'];
+const tools = ORDER.map(k => ({ k, x: 0, y: 0, state: 'home', st: 0, n: -1, done: false, wig: 0, tw: null }));
+const st = { mode: 'in', t: 0, pi: -1, band: false, tear: 0, poke: 0 };
+const pet = { x: 0, y: 0, tw: null };
+
+const home = i => [LY.tray.x + (i - 1.5) * LY.tray.gap, LY.tray.y];
+const target = k => [pet.x + SPEC[k].dx * LY.pet.s, LY.pet.y + SPEC[k].dy * LY.pet.s];
+const toolEmoji = k => k === 'treat' ? PETS[st.pi].treat : SPEC[k].e;
+const doneCount = () => tools.filter(t => t.done).length;
+
+function nextPet() {
+  st.pi = (st.pi + 1) % PETS.length;
+  st.mode = 'in'; st.t = 0; st.band = false;
+  tools.forEach((t, i) => { t.state = 'home'; t.done = false; t.tw = null; [t.x, t.y] = home(i); });
+  pet.x = view().x0 - LY.pet.s; sfx.whoosh();
+  tween(pet, LY.pet.x, 0, 0.9, 0, () => { st.mode = 'care'; st.t = 0; idle = 0; say(L.pets[PETS[st.pi].k]); });
+}
+function useTool(t) {
+  if (st.mode !== 'care') { t.wig = 0.5; sfx.nope(); sendHome(t); return; }
+  const [x, y] = target(t.k);
+  t.state = 'fly'; sfx.pick();
+  tween(t, x, y, 0.4, 50, () => { t.state = 'use'; t.st = 0; t.n = -1; say(L[t.k]); });
+}
+function sendHome(t) {
+  const [x, y] = home(tools.indexOf(t));
+  t.state = 'back';
+  tween(t, x, y, 0.4, 40, () => { t.state = 'home'; });
+}
+function finishTool(t) {
+  const first = !t.done; t.done = true;
+  sparkleAt(t.x, t.y); sfx.ding();
+  if (t.k === 'band') { st.band = true; t.state = 'gone'; }
+  else if (t.k === 'treat') { t.state = 'back'; [t.x, t.y] = home(tools.indexOf(t)); t.state = 'home'; t.wig = 0.4; }
+  else sendHome(t);
+  if (first && doneCount() === tools.length) {
+    st.mode = 'happy'; st.t = 0;
+    sfx.yay(); confettiRain(); setTimeout(() => say(L.done), 900);
+    burst(pet.x, LY.pet.y, ['#f00'], 14, 420, { type: 'emoji', ch: '❤️', size: 34, g: 200, life: 1.6 });
+  }
+}
+
+function update(dt) {
+  st.t += dt; st.poke = Math.max(0, st.poke - dt);
+  stepTween(pet, dt);
+  for (const t of tools) {
+    stepTween(t, dt); t.wig = Math.max(0, t.wig - dt);
+    if (t.state !== 'use') continue;
+    t.st += dt;
+    const [x, y] = target(t.k); t.x = x; t.y = y;
+    const step = t.k === 'steth' ? 0.55 : 0.3, n = Math.floor(t.st / step);
+    if (n !== t.n) {
+      t.n = n;
+      if (t.k === 'steth') { tone(75, 0.14, 'sine', 0.5, 50); tone(95, 0.1, 'sine', 0.4, 60, 0.16); }
+      else if (t.k === 'thermo') tone(1200 + n * 60, 0.05, 'square', 0.07);
+      else if (t.k === 'treat') sfx.nom();
+      else sfx.plop();
+    }
+    if (t.st >= SPEC[t.k].d) finishTool(t);
+  }
+  // a sick patient sheds a tear now and then
+  if (st.mode === 'care' && doneCount() < 3 && (st.tear -= dt) < 0) {
+    st.tear = 1.1 + doneCount() * 0.7;
+    const s = LY.pet.s, side = Math.random() < 0.5 ? -1 : 1;
+    addP({ x: pet.x + side * s * 0.17, y: LY.pet.y - s * 0.02, vx: side * 12, vy: 20, life: 1.1, size: 30, color: '#000',
+      g: 320, drag: 0.99, type: 'emoji', ch: '💧', rot: 0, vr: 0 });
+  }
+  if (st.mode === 'happy' && st.t > 4.6) {
+    st.mode = 'out'; sfx.whoosh();
+    tween(pet, view().x1 + LY.pet.s, 0, 0.8, 0, nextPet);
+  }
+}
+
+/* ---------- drawing ---------- */
+function drawRoom() {
+  backdrop('#d9f3ee', '#c3ebe3');
+  const v = view(), p = LY.pet, ty = tableY(), fy = ty + 150;
+  // window and a green cross
+  const wx = p.x - p.s * 1.25, wy = Math.max(v.y0 + 30, p.y - p.s * 0.5);
+  g.fillStyle = '#fff'; rr(wx - 70, wy, 140, 150, 14); g.fill();
+  g.fillStyle = '#9fdcff'; rr(wx - 60, wy + 10, 120, 130, 8); g.fill();
+  g.fillStyle = '#fff'; g.fillRect(wx - 4, wy + 10, 8, 130); g.fillRect(wx - 60, wy + 71, 120, 8);
+  emoji('☀️', wx + 28, wy + 42, 40);
+  const cx = p.x + p.s * 1.25, cy = wy + 75;
+  disc(cx, cy, 62, '#fff');
+  g.fillStyle = '#2ecc71'; rr(cx - 14, cy - 42, 28, 84, 6); g.fill(); rr(cx - 42, cy - 14, 84, 28, 6); g.fill();
+  // floor
+  g.fillStyle = '#a9d8cf'; g.fillRect(v.x0, fy, v.x1 - v.x0, v.y1 - fy);
+  g.fillStyle = '#bfe6de'; g.fillRect(v.x0, fy, v.x1 - v.x0, 10);
+  // exam table
+  const tw = p.s * 1.5;
+  g.fillStyle = '#8a97a6'; g.fillRect(p.x - tw * 0.4, ty + 30, 18, 130); g.fillRect(p.x + tw * 0.4 - 18, ty + 30, 18, 130);
+  g.fillStyle = 'rgba(0,0,0,0.12)'; rr(p.x - tw / 2 + 4, ty + 8, tw, 44, 22); g.fill();
+  g.fillStyle = '#5aa9e6'; rr(p.x - tw / 2, ty, tw, 44, 22); g.fill();
+  g.fillStyle = '#8cc6f2'; rr(p.x - tw / 2 + 10, ty + 5, tw - 20, 12, 6); g.fill();
+}
+function drawPet() {
+  const p = LY.pet, s = p.s, happy = st.mode === 'happy' || st.mode === 'out';
+  const jump = happy ? Math.abs(Math.sin(T * 6)) * 34 : 0;
+  const rot = happy ? Math.sin(T * 6) * 0.1 : Math.sin(T * 1.5) * 0.03 + Math.sin(st.poke * 40) * 0.12 * st.poke;
+  g.fillStyle = 'rgba(0,0,0,0.15)'; g.beginPath(); g.ellipse(pet.x, tableY() + 6, s * 0.34, 12, 0, 0, 7); g.fill();
+  g.save(); g.translate(pet.x, p.y - jump); g.rotate(rot);
+  emoji(PETS[st.pi].e, 0, 0, s);
+  const bx = SPEC.band.dx * s, by = SPEC.band.dy * s;
+  if (st.band) emoji('🩹', bx, by, s * 0.3, -0.5);
+  else {
+    disc(bx, by, s * 0.075, 'rgba(235,60,60,0.75)');
+    g.strokeStyle = '#b01e1e'; g.lineWidth = 5; g.lineCap = 'round';
+    for (const o of [-0.03, 0, 0.03]) { g.beginPath(); g.moveTo(bx + o * s - 8, by - 12); g.lineTo(bx + o * s + 8, by + 12); g.stroke(); }
+  }
+  g.restore();
+  // the heart beats under the stethoscope
+  const sth = tools[0];
+  if (sth.state === 'use') {
+    const beat = Math.pow(Math.max(0, Math.sin(sth.st / 0.55 * Math.PI * 2)), 4);
+    emoji('❤️', pet.x - s * 0.34, p.y + s * 0.3, s * (0.2 + 0.1 * beat));
+  }
+}
+function drawTray() {
+  const t = LY.tray, w = t.gap * 3 + t.r * 2 + 40, h = t.r * 2 + 28;
+  g.fillStyle = 'rgba(0,0,0,0.15)'; rr(t.x - w / 2 + 4, t.y - h / 2 + 8, w, h, 30); g.fill();
+  g.fillStyle = '#fff'; rr(t.x - w / 2, t.y - h / 2, w, h, 30); g.fill();
+  const hp = LY.hearts;
+  tools.forEach((tl, i) => {
+    const [x, y] = home(i), next = st.mode === 'care' && !tl.done && tl.state === 'home';
+    disc(x, y, t.r, tl.done ? '#d6f5dc' : '#e9f2f7');
+    if (next) { g.lineWidth = 5; g.strokeStyle = `rgba(255,170,30,${0.5 + 0.4 * Math.sin(T * 5 + i)})`; g.stroke(); }
+    if (tl.done) emoji('✅', x + t.r * 0.72, y - t.r * 0.72, 34);
+    emoji(tl.done ? '❤️' : '🤍', hp.x + (i - 1.5) * 62, hp.y, tl.done ? 50 + 4 * Math.sin(T * 6 + i) : 44);
+  });
+}
+function drawTools() {
+  for (const tl of tools) {
+    if (tl.state === 'gone') continue;
+    let size = LY.tray.r * 1.25, rot = Math.sin(tl.wig * 40) * 0.25 * tl.wig;
+    if (tl.state === 'drag') { size *= 1.2; rot += Math.sin(T * 10) * 0.08; }
+    if (tl.state === 'use') {
+      const k = tl.st / SPEC[tl.k].d;
+      if (tl.k === 'treat') size *= 1 - 0.85 * (Math.floor(k * 4) / 4);
+      else if (tl.k === 'steth') size *= 1 + 0.06 * Math.sin(tl.st * 11);
+      else rot += Math.sin(tl.st * 20) * 0.06;
+    }
+    emoji(toolEmoji(tl.k), tl.x, tl.y, size, rot);
+  }
+}
+function draw() { drawRoom(); drawPet(); drawTray(); drawTools(); }
+
+function hint() {
+  if (st.mode !== 'care' || tools.some(t => t.state !== 'home' && t.state !== 'gone')) return null;
+  const i = tools.findIndex(t => !t.done);
+  return i < 0 ? null : home(i);
+}
+
+/* ---------- input ---------- */
+function down(P) {
+  for (const tl of tools) {
+    if (tl.state === 'home' && Math.hypot(P.x - tl.x, P.y - tl.y) < LY.tray.r * 1.1) { P.kind = 'tool'; P.tl = tl; return; }
+  }
+  if (Math.hypot(P.x - pet.x, P.y - LY.pet.y) < LY.pet.s * 0.5 && !pet.tw) {
+    st.poke = 0.5; tone(rand(600, 800), 0.14, 'sine', 0.2, rand(900, 1200));
+    if (st.mode === 'happy') burst(P.x, P.y, ['#f00'], 4, 300, { type: 'emoji', ch: '❤️', size: 28, g: 200, life: 1 });
+    return;
+  }
+  sparkleAt(P.x, P.y);
+}
+function move(P) {
+  if (P.kind === 'tool' && P.far && P.tl.state === 'home') { P.tl.state = 'drag'; P.kind = 'drag'; sfx.pick(); }
+  if (P.kind === 'drag') { P.tl.x = P.x; P.tl.y = P.y - 20; }
+}
+function up(P) {
+  if ((P.kind === 'tool' && P.tl.state === 'home') || P.kind === 'drag') useTool(P.tl);
+}
+function layout() {
+  if (!pet.tw) pet.x = LY.pet.x; else if (st.mode === 'in') pet.tw.x1 = LY.pet.x;
+  tools.forEach((t, i) => { if (t.state === 'home' || t.state === 'back' || t.state === 'fly') { t.tw = null; t.state = 'home'; [t.x, t.y] = home(i); } });
+}
+
+start({ VL, VP, update, draw, down, move, up, hint, layout, init: nextPet });
+</script>
+</body>
+</html>
