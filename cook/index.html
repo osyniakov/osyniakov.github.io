@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pizza!">
+<meta name="theme-color" content="#fff1d6">
+<title>Pizza!</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #fff1d6; overscroll-behavior: none; }
+  * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #sat { position: fixed; top: 0; left: 0; width: 1px; height: env(safe-area-inset-top, 0px); visibility: hidden; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="sat"></div>
+<script src="../play/kit.js"></script>
+<script>
+'use strict';
+/* Pizza kitchen: put toppings on the dough, bake it in the oven, eat it slice by slice. */
+
+const ING = [
+  { e: '🍅', k: 'sauce', layer: 'sauce' }, { e: '🧀', k: 'cheese', layer: 'cheese' },
+  { e: '🍄', k: 'mushroom' }, { e: '🫑', k: 'pepper' }, { e: '🫒', k: 'olive' },
+  { e: '🌽', k: 'corn' }, { e: '🍍', k: 'pineapple' }, { e: '🥦', k: 'broccoli' }
+];
+pickLang({
+  en: {
+    code: 'en-US', hello: "Let's make pizza!", bake: 'Into the oven!', yum: 'Mmm, yummy! Eat it up!', done: 'All gone! One more!',
+    items: { sauce: 'Tomato sauce', cheese: 'Cheese', mushroom: 'Mushroom', pepper: 'Pepper', olive: 'Olive',
+      corn: 'Corn', pineapple: 'Pineapple', broccoli: 'Broccoli' }
+  },
+  uk: {
+    code: 'uk-UA', hello: 'Готуємо піцу!', bake: 'У пічку!', yum: 'Ммм, смачно! Смачного!', done: "Все з'їли! Ще одну!",
+    items: { sauce: 'Томатний соус', cheese: 'Сир', mushroom: 'Грибочок', pepper: 'Перчик', olive: 'Оливка',
+      corn: 'Кукурудза', pineapple: 'Ананас', broccoli: 'Броколі' }
+  },
+  de: {
+    code: 'de-DE', hello: 'Wir backen Pizza!', bake: 'Ab in den Ofen!', yum: 'Mmm, lecker! Guten Appetit!', done: 'Alles aufgegessen! Noch eine!',
+    items: { sauce: 'Tomatensoße', cheese: 'Käse', mushroom: 'Pilz', pepper: 'Paprika', olive: 'Olive',
+      corn: 'Mais', pineapple: 'Ananas', broccoli: 'Brokkoli' }
+  }
+});
+
+const VL = {
+  w: 1024, h: 768, tableY: 206,
+  shelf: { x: 16, y: 14, w: 992, h: 170, cols: 8, rows: 1 },
+  pizza: { x: 350, y: 486, r: 215 },
+  oven: { x: 676, y: 246, w: 324, h: 440 }
+};
+const VP = {
+  w: 768, h: 1024, tableY: 296,
+  shelf: { x: 16, y: 14, w: 736, h: 260, cols: 4, rows: 2 },
+  pizza: { x: 384, y: 520, r: 195 },
+  oven: { x: 204, y: 744, w: 360, h: 266 }
+};
+
+const SLICES = 6, BAKE = 3.4;
+const st = { mode: 'top', t: 0, sauce: 0, cheese: 0, sauceOn: false, cheeseOn: false, tops: [], baked: false,
+  slices: new Array(SLICES).fill(1), tick: -1, hello: false, steam: 0 };
+const pz = { x: 0, y: 0, s: 1, tw: null, wig: 0 };   // the pizza itself
+let fl = [];                                         // ingredients in the air or under a finger
+const SPOTS = Array.from({ length: 14 }, (_, i) => [Math.cos(i * 2.4) * (0.2 + (i * 37 % 50) / 100), Math.sin(i * 2.4) * (0.2 + (i * 37 % 50) / 100), 0.03 + (i % 3) * 0.012]);
+
+const ovenWin = () => { const o = LY.oven; return { x: o.x + 22, y: o.y + 74, w: o.w - 44, h: o.h - 98 }; };
+const ovenScale = () => { const w = ovenWin(); return Math.min(w.w, w.h) * 0.44 / LY.pizza.r; };
+const hasStuff = () => st.sauceOn || st.cheeseOn || st.tops.length > 0;
+const inOven = () => st.mode === 'toOven' || st.mode === 'bake';
+
+function shelfCell(i) {
+  const s = LY.shelf, cw = s.w / s.cols, ch = s.h / s.rows;
+  return { x: s.x + cw * (i % s.cols + 0.5), y: s.y + ch * Math.floor(i / s.cols) + ch * 0.44, cw, ch };
+}
+function shelfAt(x, y) {
+  const s = LY.shelf;
+  if (!inR(x, y, s)) return -1;
+  const i = Math.floor((y - s.y) / (s.h / s.rows)) * s.cols + Math.floor((x - s.x) / (s.w / s.cols));
+  return i < ING.length ? i : -1;
+}
+
+function takeIng(i, x, y) {
+  if (st.mode !== 'top' || pz.tw) { sfx.nope(); return null; }
+  const c = shelfCell(i);
+  const it = { i, e: ING[i].e, x: x ?? c.x, y: y ?? c.y, tw: null, drag: false };
+  fl.push(it); sfx.pick(); say(L.items[ING[i].k]);
+  return it;
+}
+function throwIng(it) {
+  const p = LY.pizza, a = rand(0, Math.PI * 2), d = Math.sqrt(Math.random()) * 0.66 * p.r;
+  it.drag = false;
+  tween(it, p.x + Math.cos(a) * d, p.y + Math.sin(a) * d, 0.45, 90, land);
+}
+function land(it) {
+  it.dead = true;
+  if (st.mode !== 'top') return;
+  const p = LY.pizza, ing = ING[it.i];
+  pz.wig = 0.3; sfx.plop();
+  if (ing.layer) {
+    st[ing.layer + 'On'] = true;
+    burst(it.x, it.y, ing.layer === 'sauce' ? ['#d9412b', '#ff6b4a'] : ['#ffd95e', '#fff0a8'], 12, 220, { type: 'dot', life: 0.5, size: 7 });
+    return;
+  }
+  let dx = (it.x - p.x) / p.r, dy = (it.y - p.y) / p.r;
+  const d = Math.hypot(dx, dy);
+  if (d > 0.7) { dx *= 0.7 / d; dy *= 0.7 / d; }
+  st.tops.push({ e: it.e, dx, dy, rot: rand(-0.6, 0.6), t: 0 });
+  if (st.tops.length > 36) st.tops.shift();
+}
+
+function bake() {
+  st.mode = 'toOven'; say(L.bake); sfx.whoosh();
+  const w = ovenWin();
+  tween(pz, w.x + w.w / 2, w.y + w.h / 2, 0.6, 40, () => { st.mode = 'bake'; st.t = 0; st.tick = -1; sfx.plop(); });
+}
+function eatSlice(x, y) {
+  const a = (Math.atan2(y - pz.y, x - pz.x) + Math.PI * 2) % (Math.PI * 2);
+  let i = Math.floor(a / (Math.PI * 2 / SLICES)) % SLICES;
+  for (let n = 0; n < SLICES && !st.slices[i]; n++) i = (i + 1) % SLICES;
+  if (!st.slices[i]) return;
+  st.slices[i] = 0; sfx.nom(); tone(180, 0.09, 'square', 0.1, 120, 0.16);
+  const m = (i + 0.5) * Math.PI * 2 / SLICES, r = LY.pizza.r * 0.55;
+  burst(pz.x + Math.cos(m) * r, pz.y + Math.sin(m) * r, ['#d9a04e', '#f5b93a', '#b8321f'], 16, 300, { type: 'dot', life: 0.7, size: 6 });
+  if (!st.slices.some(Boolean)) {
+    st.mode = 'done'; st.t = 0;
+    sfx.yay(); confettiRain(); setTimeout(() => say(L.done), 300);
+  }
+}
+function newPizza() {
+  Object.assign(st, { mode: 'new', t: 0, sauce: 0, cheese: 0, sauceOn: false, cheeseOn: false, tops: [], baked: false });
+  st.slices.fill(1);
+  pz.x = view().x0 - LY.pizza.r * 1.5; pz.y = LY.pizza.y; pz.s = 1;
+  sfx.whoosh();
+  tween(pz, LY.pizza.x, LY.pizza.y, 0.7, 0, () => { st.mode = 'top'; });
+}
+
+function update(dt) {
+  st.t += dt;
+  pz.wig = Math.max(0, pz.wig - dt);
+  stepTween(pz, dt);
+  pz.s = lerp(pz.s, inOven() ? ovenScale() : 1, Math.min(1, dt * 7));
+  st.sauce = Math.min(1, st.sauce + (st.sauceOn ? dt * 3 : 0));
+  st.cheese = Math.min(1, st.cheese + (st.cheeseOn ? dt * 3 : 0));
+  for (const t of st.tops) t.t += dt;
+  for (const it of fl) stepTween(it, dt);
+  fl = fl.filter(i => !i.dead);
+
+  if (st.mode === 'bake') {
+    const n = Math.floor(st.t / 0.45);
+    if (n !== st.tick) { st.tick = n; tone(n % 2 ? 900 : 1100, 0.05, 'square', 0.07); }
+    if (st.t > BAKE) {
+      st.baked = true; st.mode = 'out'; sfx.ding();
+      tween(pz, LY.pizza.x, LY.pizza.y, 0.7, 60, () => { st.mode = 'eat'; st.t = 0; say(L.yum); });
+    }
+  } else if (st.mode === 'eat') {
+    if ((st.steam -= dt) < 0) {
+      st.steam = 0.12;
+      addP({ x: pz.x + rand(-0.6, 0.6) * LY.pizza.r, y: pz.y + rand(-0.5, 0.2) * LY.pizza.r, vx: rand(-15, 15), vy: -70,
+        life: 1.3, size: rand(8, 16), color: 'rgba(255,255,255,0.5)', g: -30, drag: 0.99, type: 'dot', rot: 0, vr: 0 });
+    }
+  } else if (st.mode === 'done' && st.t > 3.2) newPizza();
+}
+
+/* ---------- drawing ---------- */
+function drawRoom() {
+  backdrop('#fff1d6', '#ffe2b0');
+  const v = view(), y = LY.tableY;
+  g.fillStyle = 'rgba(255,255,255,0.45)';
+  for (let x = Math.floor(v.x0 / 90) * 90; x < v.x1; x += 90)
+    for (let yy = Math.floor(v.y0 / 90) * 90; yy < y; yy += 90) { rr(x + 5, yy + 5, 80, 80, 8); g.fill(); }
+  g.fillStyle = '#d99a58'; g.fillRect(v.x0, y, v.x1 - v.x0, v.y1 - y);
+  g.fillStyle = '#eab676'; g.fillRect(v.x0, y, v.x1 - v.x0, 14);
+  g.fillStyle = 'rgba(120,70,20,0.08)';
+  for (let yy = y + 60; yy < v.y1; yy += 70) g.fillRect(v.x0, yy, v.x1 - v.x0, 5);
+}
+function drawShelf() {
+  const s = LY.shelf, ch = s.h / s.rows;
+  g.fillStyle = '#b87a3d'; rr(s.x - 8, s.y - 8, s.w + 16, s.h + 16, 18); g.fill();
+  g.fillStyle = '#fff8ea'; rr(s.x, s.y, s.w, s.h, 12); g.fill();
+  for (let r = 0; r < s.rows; r++) {
+    const py = s.y + ch * (r + 1) - 16;
+    g.fillStyle = '#c98b4a'; g.fillRect(s.x, py, s.w, 16);
+    g.fillStyle = '#a86d33'; g.fillRect(s.x, py + 12, s.w, 4);
+  }
+  const live = st.mode === 'top';
+  ING.forEach((ing, i) => {
+    const c = shelfCell(i), sz = Math.min(c.cw * 0.7, c.ch * 0.62, 96);
+    disc(c.x, c.y + sz * 0.52, sz * 0.5, 'rgba(184,122,61,0.18)');
+    emoji(ing.e, c.x, c.y + (live ? Math.sin(T * 2.4 + i) * 3 : 0), sz, 0, live ? 1 : 0.45);
+  });
+}
+function drawOven() {
+  const o = LY.oven, w = ovenWin(), hot = st.mode === 'bake';
+  const ready = st.mode === 'top' && hasStuff() && !pz.tw;
+  if (ready) {
+    g.fillStyle = `rgba(255,150,40,${0.35 + 0.3 * Math.sin(T * 6)})`;
+    rr(o.x - 12, o.y - 12, o.w + 24, o.h + 24, 34); g.fill();
+  }
+  g.fillStyle = 'rgba(0,0,0,0.18)'; rr(o.x + 4, o.y + 10, o.w, o.h, 26); g.fill();
+  g.fillStyle = '#c7ced8'; rr(o.x, o.y, o.w, o.h, 26); g.fill();
+  g.fillStyle = '#e4e9ef'; rr(o.x, o.y, o.w, 62, 26); g.fill();
+  for (let i = 0; i < 3; i++) {
+    const kx = o.x + 44 + i * 52, ky = o.y + 32;
+    disc(kx, ky, 16, '#59626e');
+    g.strokeStyle = '#fff'; g.lineWidth = 4; g.lineCap = 'round';
+    const a = hot ? T * 2 + i : -1.2 + i * 0.5;
+    g.beginPath(); g.moveTo(kx, ky); g.lineTo(kx + Math.cos(a) * 11, ky + Math.sin(a) * 11); g.stroke();
+  }
+  // timer light
+  const lx = o.x + o.w - 44, ly = o.y + 32;
+  disc(lx, ly, 18, '#3a424d');
+  if (hot) {
+    g.strokeStyle = '#ff9a1f'; g.lineWidth = 7; g.lineCap = 'butt';
+    g.beginPath(); g.arc(lx, ly, 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, st.t / BAKE)); g.stroke();
+  } else disc(lx, ly, 8, ready ? '#4cd137' : '#7d8794');
+  g.fillStyle = '#2b3038'; rr(w.x - 8, w.y - 8, w.w + 16, w.h + 16, 18); g.fill();
+  const gr = g.createLinearGradient(0, w.y, 0, w.y + w.h);
+  gr.addColorStop(0, hot ? '#7a2a10' : '#3b3f48'); gr.addColorStop(1, hot ? '#ff7a1f' : '#23262c');
+  g.fillStyle = gr; rr(w.x, w.y, w.w, w.h, 12); g.fill();
+  g.strokeStyle = '#8a929e'; g.lineWidth = 4;
+  for (const k of [0.3, 0.7]) { g.beginPath(); g.moveTo(w.x + 6, w.y + w.h * k); g.lineTo(w.x + w.w - 6, w.y + w.h * k); g.stroke(); }
+  if (ready) emoji('🔥', w.x + w.w / 2, w.y + w.h / 2, Math.min(w.w, w.h) * (0.45 + 0.05 * Math.sin(T * 6)), 0, 0.9);
+  g.fillStyle = '#8a929e'; rr(o.x + o.w * 0.2, o.y + o.h - 20, o.w * 0.6, 10, 5); g.fill();
+}
+function drawOvenGlass() {
+  if (!inOven()) return;
+  const w = ovenWin(), k = st.mode === 'bake' ? 0.22 + 0.1 * Math.sin(T * 9) : 0.1;
+  g.fillStyle = `rgba(255,120,20,${k})`; rr(w.x, w.y, w.w, w.h, 12); g.fill();
+  if (st.mode === 'bake') for (let i = 0; i < 4; i++)
+    emoji('🔥', w.x + w.w * (0.14 + i * 0.24), w.y + w.h - 18 + Math.sin(T * 10 + i * 2) * 4, 34);
+}
+function drawBoard() {
+  const p = LY.pizza;
+  g.fillStyle = 'rgba(0,0,0,0.15)'; g.beginPath(); g.ellipse(p.x + 6, p.y + 14, p.r * 1.1, p.r * 1.1, 0, 0, 7); g.fill();
+  g.fillStyle = '#c98b4a'; rr(p.x - p.r * 1.45, p.y - 26, p.r * 0.6, 52, 26); g.fill();
+  disc(p.x, p.y, p.r * 1.1, '#c98b4a');
+  disc(p.x, p.y, p.r * 1.04, '#deab6c');
+}
+function drawPizza() {
+  const r = LY.pizza.r, b = st.baked;
+  g.save(); g.translate(pz.x, pz.y); g.rotate(Math.sin(pz.wig * 40) * 0.04 * pz.wig); g.scale(pz.s, pz.s);
+  const cut = st.mode === 'eat' || st.mode === 'done';
+  if (cut) {
+    g.beginPath();
+    st.slices.forEach((on, i) => {
+      if (!on) return;
+      const a0 = i * Math.PI * 2 / SLICES;
+      g.moveTo(0, 0); g.arc(0, 0, r + 20, a0, a0 + Math.PI * 2 / SLICES); g.closePath();
+    });
+    g.clip();
+  }
+  disc(0, 0, r, b ? '#c98a3c' : '#edd09a');
+  disc(0, 0, r * 0.93, b ? '#dba552' : '#f6e2b5');
+  if (st.sauce > 0) disc(0, 0, r * 0.86 * ease(st.sauce), b ? '#b8321f' : '#de4a30');
+  if (st.cheese > 0) {
+    const cr = r * 0.8 * ease(st.cheese);
+    g.fillStyle = b ? '#f2b53a' : '#ffdd66'; g.beginPath();
+    for (let i = 0; i <= 48; i++) {
+      const a = i / 48 * Math.PI * 2, rad = cr * (1 + 0.035 * Math.sin(a * 7) + 0.02 * Math.sin(a * 13));
+      g.lineTo(Math.cos(a) * rad, Math.sin(a) * rad);
+    }
+    g.fill();
+    if (b) for (const s of SPOTS) disc(s[0] * r, s[1] * r, s[2] * r, 'rgba(190,105,30,0.55)');
+  }
+  for (const t of st.tops) {
+    const k = Math.min(1, t.t / 0.2);
+    emoji(t.e, t.dx * r, t.dy * r, r * 0.3 * (0.6 + 0.4 * k + 0.25 * Math.sin(k * Math.PI)), t.rot);
+  }
+  if (cut) {
+    g.strokeStyle = 'rgba(120,60,10,0.45)'; g.lineWidth = 4;
+    for (let i = 0; i < SLICES; i++) {
+      const a = i * Math.PI * 2 / SLICES;
+      g.beginPath(); g.moveTo(0, 0); g.lineTo(Math.cos(a) * r, Math.sin(a) * r); g.stroke();
+    }
+  }
+  g.restore();
+}
+function draw() {
+  drawRoom(); drawShelf(); drawOven(); drawBoard(); drawPizza(); drawOvenGlass();
+  for (const it of fl) emoji(it.e, it.x, it.y, it.drag ? 96 : 80, it.drag ? Math.sin(T * 10) * 0.1 : 0);
+}
+
+function hint() {
+  if (st.mode === 'top' && !pz.tw) {
+    if ((st.sauceOn || st.cheeseOn) && st.tops.length >= 2) { const w = ovenWin(); return [w.x + w.w / 2, w.y + w.h / 2]; }
+    const c = shelfCell(Math.floor(T / 3) % ING.length); return [c.x, c.y];
+  }
+  if (st.mode === 'eat') return [pz.x, pz.y];
+  return null;
+}
+
+/* ---------- input ---------- */
+function down(P) {
+  if (!st.hello) { st.hello = true; say(L.hello); }
+  if (st.mode === 'done' && st.t > 1.2) { newPizza(); return; }
+  const gi = shelfAt(P.x, P.y);
+  if (gi >= 0) { P.kind = 'shelf'; P.gi = gi; return; }
+  if (Math.hypot(P.x - pz.x, P.y - pz.y) < LY.pizza.r && !inOven()) {
+    if (st.mode === 'eat') eatSlice(P.x, P.y);
+    else if (st.mode === 'top' && !pz.tw) P.kind = 'pizza';
+    return;
+  }
+  if (inR(P.x, P.y, LY.oven, 6)) {
+    if (st.mode === 'top' && hasStuff() && !pz.tw) bake(); else if (st.mode === 'top') sfx.nope();
+    return;
+  }
+  sparkleAt(P.x, P.y);
+}
+function move(P) {
+  if (P.kind === 'shelf' && P.far) {
+    const it = takeIng(P.gi, P.x, P.y);
+    if (it) { it.drag = true; P.kind = 'drag'; P.it = it; } else P.kind = 'none';
+  } else if (P.kind === 'pizza' && P.far && st.mode === 'top' && hasStuff()) P.kind = 'pizzaDrag';
+  if (P.kind === 'drag') { P.it.x = P.x; P.it.y = P.y - 20; }
+  else if (P.kind === 'pizzaDrag') {
+    pz.x = P.x; pz.y = P.y;
+    if (inR(P.x, P.y, LY.oven)) { P.kind = 'none'; bake(); }
+  }
+}
+function up(P) {
+  if (P.kind === 'shelf') { const it = takeIng(P.gi); if (it) throwIng(it); }
+  else if (P.kind === 'drag') {
+    const p = LY.pizza;
+    if (st.mode === 'top' && Math.hypot(P.it.x - p.x, P.it.y - p.y) < p.r * 0.9) land(P.it); else throwIng(P.it);
+  } else if (P.kind === 'pizza') { pz.wig = 0.5; sfx.plop(); }
+  else if (P.kind === 'pizzaDrag') tween(pz, LY.pizza.x, LY.pizza.y, 0.35, 0);
+}
+function layout() {
+  if (pz.tw) pz.tw = null;
+  const w = ovenWin();
+  if (inOven()) { st.mode = 'bake'; pz.x = w.x + w.w / 2; pz.y = w.y + w.h / 2; }
+  else { pz.x = LY.pizza.x; pz.y = LY.pizza.y; if (st.mode === 'out') { st.mode = 'eat'; st.t = 0; } if (st.mode === 'new') st.mode = 'top'; }
+  for (const it of fl) if (!it.drag) it.dead = true;
+}
+
+start({ VL, VP, update, draw, down, move, up, hint, layout });
+</script>
+</body>
+</html>

@@ -251,11 +251,14 @@ const Home = {
     { e: '🎆', c: '#7b4dff', s: () => Fireworks },
     { e: '🐶', c: '#4cc437', s: () => Peekaboo },
     { e: '🎹', c: '#2e86ff', s: () => Music },
-    { e: '🛒', c: '#ff9a1f', href: '../shop/' }
+    { e: '🛒', c: '#ff9a1f', href: '../shop/' },
+    { e: '🍕', c: '#e8553a', href: '../cook/' },
+    { e: '🧽', c: '#19b5c9', href: '../wash/' },
+    { e: '🩺', c: '#ff7ac0', href: '../vet/' }
   ],
   enter() { this.clouds = makeClouds(5); },
   layout() {
-    const n = this.items.length, cols = W / H > 1.9 ? n : W >= H ? 3 : 2, rows = Math.ceil(n / cols);
+    const n = this.items.length, cols = W / H > 1.9 ? Math.ceil(n / 2) : W >= H ? 4 : 2, rows = Math.ceil(n / cols);
     const cw = W / cols, ch = H / rows, r = Math.min(cw, ch) * 0.36;
     return this.items.map((it, i) => {
       const row = Math.floor(i / cols), inRow = Math.min(cols, n - row * cols);   // center a short last row
